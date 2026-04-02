@@ -1,0 +1,445 @@
+<?php
+require_once __DIR__ . '/../includes/config.php';
+require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/session-manager.php';
+require_once __DIR__ . '/../includes/personality-prompts.php';
+requireAuth();
+
+$user = getCurrentUser();
+$sessionId = intval($_GET['session_id'] ?? 0);
+
+if (!$sessionId) { header('Location: ' . BASE_URL . '/app/select-topic.php'); exit; }
+$session = getSession($sessionId, $user['id']);
+if (!$session) { header('Location: ' . BASE_URL . '/app/dashboard.php'); exit; }
+if ($session['status'] === 'completed') { header('Location: ' . BASE_URL . '/app/report.php?session_id=' . $sessionId); exit; }
+
+$currentRound = $session['current_round'];
+$personality = getPersonalityForRound($currentRound);
+$topicDisplay = $session['custom_topic'] ?: $session['topic'];
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Round <?= $currentRound ?> — <?= APP_NAME ?></title>
+    <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/global.css">
+    <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/chat.css">
+    <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/skins.css">
+</head>
+<body>
+
+<!-- ====== TRANSITION SCREEN ====== -->
+<div class="transition-screen" id="transitionScreen">
+    <div class="transition-sequence" id="transSeq">
+        <div class="trans-step" id="transStep1">Round <?= $currentRound ?> of <?= TOTAL_ROUNDS ?></div>
+        <div class="trans-step" id="transStep2">Entering next room...</div>
+        <div class="trans-step trans-persona" id="transStep3"><?= htmlspecialchars($personality['name']) ?></div>
+    </div>
+</div>
+
+<!-- ====== MAIN CHAT WRAPPER ====== -->
+<div class="chat-wrapper" id="chatWrapper" style="opacity: 0;">
+    <div class="chat-container">
+
+        <!-- Top Bar -->
+        <div class="topbar">
+            <div class="topbar-left">
+                <div class="round-dots">
+                    <?php for ($i = 1; $i <= TOTAL_ROUNDS; $i++): ?>
+                        <div class="round-dot <?= $i < $currentRound ? 'done' : ($i == $currentRound ? 'active' : '') ?>" id="dot-<?= $i ?>"></div>
+                    <?php endfor; ?>
+                </div>
+                <span class="round-label" id="roundLabel">Round <?= $currentRound ?> of <?= TOTAL_ROUNDS ?></span>
+            </div>
+            <div class="topbar-right">
+                <span class="pressure-label" id="pressureLabel">PRESSURE</span>
+                <div class="pressure-track">
+                    <div class="pressure-fill" id="pressureFill" style="width: 10%;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Messages -->
+        <div class="chat-messages" id="chatMessages"></div>
+
+        <!-- End Round Bar -->
+        <div class="end-round-bar" id="endRoundBar" style="display:none;">
+            <button class="btn btn-ghost end-round-btn" id="endRoundBtn" onclick="endRound()">End Round & Continue →</button>
+        </div>
+
+        <!-- Input Area -->
+        <div class="chat-input-area">
+            <div class="input-wrap">
+                <textarea class="chat-input" id="userInput" placeholder="Respond carefully..." rows="1"></textarea>
+                <button class="send-btn" id="sendBtn" onclick="sendMessage()" disabled>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- ====== LIVE HUD OVERLAY ====== -->
+        <div class="live-hud" id="liveHud">
+            <div class="hud-header">
+                <span class="hud-dot"></span>
+                <span>REAL-TIME AUDIT FEED</span>
+            </div>
+            <div class="hud-body">
+                <div style="height: 60px; width: 140px;"><canvas id="hudChart"></canvas></div>
+                <div class="hud-stats mt-2">
+                    <div class="stat-row"><span class="s-label">VELOCITY</span><span class="s-val" id="hudVelocity">--</span></div>
+                    <div class="stat-row"><span class="s-label">PRESSURE</span><span class="s-val" id="hudPressure">--</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ====== ANALYSIS OVERLAY ====== -->
+<div class="analysis-overlay" id="analysisOverlay" style="display:none;">
+    <div class="analysis-content">
+        <div class="loader-circle"></div>
+        <h2 class="mt-5" id="analysisHeading">Generating Professional Audit</h2>
+        <p class="text-secondary mt-2" id="analysisStatus">Initializing behavioral baseline...</p>
+        <div class="loader-track mt-6"><div class="loader-bar" id="loaderBar" style="width: 0%;"></div></div>
+        <div class="loader-meta mt-3">
+            <span class="text-xs uppercase tracking-widest text-tertiary">Real-Time Synthesis Active</span>
+        </div>
+    </div>
+</div>
+
+<!-- ====== ROUND TRANSITION OVERLAY (between rounds) ====== -->
+<div class="transition-screen" id="roundTransition" style="display:none;">
+    <div class="transition-sequence">
+        <div class="trans-step" id="rtStep1"></div>
+        <div class="trans-step" id="rtStep2">Entering next room...</div>
+        <div class="trans-step trans-persona" id="rtStep3"></div>
+    </div>
+</div>
+
+<script>
+const SESSION_ID = <?= $sessionId ?>;
+const BASE = '<?= BASE_URL ?>';
+const TOTAL = <?= TOTAL_ROUNDS ?>;
+const API_CHAT = BASE + '/api/chat.php';
+const API_END = BASE + '/api/end-round.php';
+const API_ANALYZE = BASE + '/api/analyze.php';
+
+let round = <?= $currentRound ?>;
+let exchanges = 0;
+let waiting = false;
+let basePadding = 24; // for UI tightening
+
+const NAMES = {1:'The Micromanager Boss',2:'The Conspiracy Theorist Uncle',3:'The Aggressive Investor',4:'The Passive-Aggressive Coworker',5:'The Emotional Guilt-Tripper'};
+const SKINS = {1:'skin-micromanager',2:'skin-conspiracy',3:'skin-investor',4:'skin-passive-aggressive',5:'skin-guilt-tripper'};
+let hudChart = null;
+
+// ---- INITIAL HUD INITIALIZATION ----
+function initHUD() {
+    const ctx = document.getElementById('hudChart').getContext('2d');
+    hudChart = new Chart(ctx, {
+        type: 'line',
+        data: { labels: [], datasets: [{ data: [], borderColor: '#3B82F6', borderWidth: 2, pointRadius: 0, tension: 0.4, fill: true, backgroundColor: 'rgba(59, 130, 246, 0.1)' }] },
+        options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { display: false } } }
+    });
+}
+function updateHUD(val, pressure) {
+    if (!hudChart) return;
+    hudChart.data.labels.push('');
+    hudChart.data.datasets[0].data.push(val);
+    if (hudChart.data.datasets[0].data.length > 20) { hudChart.data.labels.shift(); hudChart.data.datasets[0].data.shift(); }
+    hudChart.update();
+    document.getElementById('hudVelocity').textContent = val + '%';
+    document.getElementById('hudPressure').textContent = pressure + '%';
+}
+
+// ---- INITIAL TRANSITION (timed text sequence) ----
+document.addEventListener('DOMContentLoaded', () => {
+    initHUD();
+    const screen = document.getElementById('transitionScreen');
+    const s1 = document.getElementById('transStep1');
+    const s2 = document.getElementById('transStep2');
+    const s3 = document.getElementById('transStep3');
+
+    // Step 1: show round number
+    s1.classList.add('visible');
+    setTimeout(() => {
+        s1.classList.remove('visible');
+        s2.classList.add('visible'); // "Entering next room..."
+    }, 1500);
+    setTimeout(() => {
+        s2.classList.remove('visible');
+        s3.classList.add('visible'); // Persona name
+    }, 2500);
+    setTimeout(() => {
+        screen.style.opacity = '0';
+        setTimeout(() => {
+            screen.style.display = 'none';
+            const wrapper = document.getElementById('chatWrapper');
+            wrapper.style.display = 'flex';
+            wrapper.style.opacity = '1';
+            applySkin(round);
+            loadRound();
+        }, 500);
+    }, 3500);
+
+    // Auto-resize textarea
+    const input = document.getElementById('userInput');
+    input.addEventListener('input', () => {
+        input.style.height = 'auto';
+        input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+        updateSendBtn();
+    });
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    });
+});
+
+function loadRound() {
+    fetch(API_CHAT, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ session_id: SESSION_ID, get_opener: true }) })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) { addSystem(data.error); return; }
+        updateTopbar(data);
+        if (data.already_started) {
+            data.messages.forEach(m => {
+                addBubble(m.role === 'assistant' ? 'ai' : 'user', m.content, false);
+                if (m.role === 'user') updateHUD(Math.min(100, Math.round(m.char_count / 5)), Math.min(100, Math.round(m.response_time_ms / 100)));
+            });
+            exchanges = data.exchange_count;
+            checkEnd(exchanges);
+        } else {
+            showTyping();
+            setTimeout(() => { hideTyping(); typewriterBubble('ai', data.ai_message); }, 800 + Math.random() * 1200);
+        }
+        enableInput(); updatePressure();
+    })
+    .catch(() => addSystem('Connection error. Please refresh.'));
+}
+
+function sendMessage() {
+    const input = document.getElementById('userInput');
+    const msg = input.value.trim();
+    if (msg.length < 10 || waiting) return;
+    waiting = true; disableInput();
+    input.value = ''; input.style.height = 'auto';
+    addBubble('user', msg, true);
+    showTyping();
+
+    fetch(API_CHAT, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ session_id: SESSION_ID, message: msg }) })
+    .then(r => r.json())
+    .then(data => {
+        const delay = 1000 + Math.random() * 2000;
+        setTimeout(() => {
+            hideTyping();
+            if (data.error) { addSystem(data.error); enableInput(); waiting = false; return; }
+            typewriterBubble('ai', data.ai_message);
+            exchanges = data.exchange_count;
+            updatePressure(); tightenUI();
+            updateHUD(Math.min(100, Math.round(data.char_count / 5)), Math.min(100, Math.round(data.response_time_ms / 100)));
+            if (data.must_end_round) showEndBar(true);
+            else if (data.can_end_round) { showEndBar(false); enableInput(); }
+            else enableInput();
+            waiting = false;
+        }, delay);
+    })
+    .catch(() => { hideTyping(); addSystem('Connection error.'); enableInput(); waiting = false; });
+}
+
+function endRound() {
+    disableInput(); document.getElementById('endRoundBar').style.display = 'none';
+    fetch(API_END, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ session_id: SESSION_ID }) })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) { addSystem(data.error); return; }
+        if (data.session_completed) triggerAnalysis();
+        else { round = data.next_round; showRoundTransition(round); }
+    })
+    .catch(() => addSystem('Connection error.'));
+}
+
+function showRoundTransition(nextRound) {
+    const overlay = document.getElementById('roundTransition');
+    document.getElementById('rtStep1').textContent = `Round ${nextRound - 1} Complete`;
+    document.getElementById('rtStep3').textContent = NAMES[nextRound] || '';
+    overlay.style.display = 'flex'; overlay.style.opacity = '1';
+
+    const s1 = document.getElementById('rtStep1');
+    const s2 = document.getElementById('rtStep2');
+    const s3 = document.getElementById('rtStep3');
+    [s1,s2,s3].forEach(s => s.classList.remove('visible'));
+
+    s1.classList.add('visible');
+    setTimeout(() => { s1.classList.remove('visible'); s2.classList.add('visible'); }, 1500);
+    setTimeout(() => { s2.classList.remove('visible'); s3.classList.add('visible'); }, 2500);
+    setTimeout(() => {
+        overlay.style.opacity = '0';
+        setTimeout(() => {
+            overlay.style.display = 'none';
+            document.getElementById('chatMessages').innerHTML = '';
+            exchanges = 0; basePadding = 24;
+            document.getElementById('endRoundBar').style.display = 'none';
+            applySkin(nextRound);
+            loadRound();
+        }, 500);
+    }, 3500);
+}
+
+function triggerAnalysis() {
+    const overlay = document.getElementById('analysisOverlay');
+    const status = document.getElementById('analysisStatus');
+    const bar = document.getElementById('loaderBar');
+    overlay.style.display = 'flex';
+    
+    // Cinematic stages
+    const stages = [
+        "Calibrating behavioral baselines...",
+        "Profiling response consistency (Round 3)...",
+        "Mapping psychological blind spots...",
+        "Finalizing cinematic audit report..."
+    ];
+    
+    let stageIdx = 0;
+    const stageInterval = setInterval(() => {
+        if (stageIdx < stages.length - 1) {
+            stageIdx++;
+            status.textContent = stages[stageIdx];
+        }
+    }, 2200);
+
+    // Simulated Progress Bar (0 to 95%)
+    let pct = 0;
+    const barInterval = setInterval(() => {
+        if (pct < 95) {
+            pct += (Math.random() * 2);
+            bar.style.width = pct + '%';
+        }
+    }, 150);
+
+    fetch(API_ANALYZE, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ session_id: SESSION_ID }) })
+    .then(r => r.json())
+    .then(data => {
+        clearInterval(stageInterval);
+        clearInterval(barInterval);
+        if (data.error) { document.getElementById('analysisHeading').textContent = 'Analysis Failed'; status.textContent = data.error; return; }
+        
+        // Finalize bar and redirect
+        bar.style.width = '100%';
+        status.textContent = "Audit Complete. Redirecting...";
+        setTimeout(() => {
+            window.location.href = BASE + '/app/report.php?session_id=' + SESSION_ID;
+        }, 800);
+    })
+    .catch(() => { 
+        clearInterval(stageInterval); clearInterval(barInterval);
+        document.getElementById('analysisHeading').textContent = 'Error'; status.textContent = 'Analysis connection failed.'; 
+    });
+}
+
+// ---- TYPEWRITER EFFECT ---- 
+function typewriterBubble(type, text) {
+    const container = document.getElementById('chatMessages');
+    const div = document.createElement('div');
+    div.className = `message message-${type} fade-in-up`;
+    const bubble = document.createElement('div');
+    bubble.className = 'message-bubble';
+    const time = document.createElement('div');
+    time.className = 'message-time';
+    time.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    div.appendChild(bubble); div.appendChild(time);
+    container.appendChild(div);
+
+    let i = 0;
+    const speed = Math.max(8, Math.min(25, 2000 / text.length)); // adaptive speed
+    function type_() {
+        if (i < text.length) {
+            bubble.textContent += text.charAt(i); i++;
+            container.scrollTop = container.scrollHeight;
+            setTimeout(type_, speed);
+        }
+    }
+    type_();
+}
+
+function addBubble(type, text, animate) {
+    const container = document.getElementById('chatMessages');
+    const div = document.createElement('div');
+    div.className = `message message-${type}` + (animate ? ' fade-in-up' : '');
+    const bubble = document.createElement('div');
+    bubble.className = 'message-bubble';
+    bubble.textContent = text;
+    const time = document.createElement('div');
+    time.className = 'message-time';
+    time.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    div.appendChild(bubble); div.appendChild(time);
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+}
+
+function addSystem(text) {
+    const container = document.getElementById('chatMessages');
+    const div = document.createElement('div');
+    div.className = 'alert alert-error';
+    div.style.maxWidth = '80%'; div.style.margin = '8px auto';
+    div.textContent = text;
+    container.appendChild(div);
+}
+
+function showTyping() {
+    if (document.getElementById('typingDots')) return;
+    const container = document.getElementById('chatMessages');
+    const div = document.createElement('div');
+    div.id = 'typingDots'; div.className = 'typing-indicator';
+    div.innerHTML = '<div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>';
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+}
+function hideTyping() { const el = document.getElementById('typingDots'); if (el) el.remove(); }
+
+function showEndBar(must) {
+    const bar = document.getElementById('endRoundBar');
+    bar.style.display = 'flex';
+    if (must) { disableInput(); document.getElementById('endRoundBtn').textContent = round >= TOTAL ? 'Complete & Get Report →' : 'End Round & Continue →'; }
+}
+function checkEnd(c) { if (c >= 6) showEndBar(true); else if (c >= 4) showEndBar(false); }
+
+function applySkin(r) {
+    const w = document.getElementById('chatWrapper');
+    Object.values(SKINS).forEach(s => w.classList.remove(s));
+    if (SKINS[r]) w.classList.add(SKINS[r]);
+}
+
+function updateTopbar(data) {
+    document.getElementById('roundLabel').textContent = `Round ${data.round} of ${TOTAL}`;
+    document.title = `Round ${data.round}: ${data.personality_name} — The Social Gauntlet`;
+    for (let i = 1; i <= TOTAL; i++) {
+        const dot = document.getElementById('dot-' + i);
+        if (dot) { dot.classList.remove('done','active'); if (i < data.round) dot.classList.add('done'); else if (i == data.round) dot.classList.add('active'); }
+    }
+}
+
+function updatePressure() {
+    const base = (round - 1) * 20;
+    const ex = exchanges * 3;
+    const total = Math.min(base + ex + 10, 100);
+    const fill = document.getElementById('pressureFill');
+    fill.style.width = total + '%';
+    // Color shift: blue → yellow → red
+    if (total < 35) fill.style.background = 'linear-gradient(to right, #3B82F6, #60A5FA)';
+    else if (total < 65) fill.style.background = 'linear-gradient(to right, #3B82F6, #FBBF24)';
+    else fill.style.background = 'linear-gradient(to right, #FBBF24, #EF4444)';
+}
+
+// UI TIGHTENING — reduce padding as pressure increases
+function tightenUI() {
+    const pct = Math.min((round - 1) * 20 + exchanges * 3 + 10, 100);
+    const newPad = Math.max(12, basePadding - (pct * 0.12));
+    document.querySelectorAll('.message-bubble').forEach(b => { b.style.padding = `${newPad}px ${newPad + 4}px`; });
+}
+
+function enableInput() { document.getElementById('userInput').disabled = false; document.getElementById('userInput').focus(); updateSendBtn(); }
+function disableInput() { document.getElementById('userInput').disabled = true; document.getElementById('sendBtn').disabled = true; }
+function updateSendBtn() { document.getElementById('sendBtn').disabled = document.getElementById('userInput').value.trim().length < 10 || waiting; }
+</script>
+</body>
+</html>

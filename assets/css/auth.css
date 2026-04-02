@@ -1,0 +1,7 @@
+/* auth.css */
+.auth-wrapper { min-height: 80vh; display: flex; align-items: center; justify-content: center; padding: 48px 0; }
+.auth-card { max-width: 480px; width: 100%; padding: 48px; }
+.auth-header { margin-bottom: 32px; }
+.auth-header h1 { margin-bottom: 8px; font-size: 28px; }
+.auth-form .btn { margin-top: 8px; }
+.auth-footer { padding-top: 24px; border-top: 1px solid var(--border-subtle); }

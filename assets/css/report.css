@@ -1,0 +1,255 @@
+/* ==============================================
+   report.css — Vulnerability Report
+   ============================================== */
+
+.report-wrapper {
+    padding: 60px 48px;
+    max-width: 1000px;
+    margin: 48px auto;
+    background: #000;
+    border: 1px solid rgba(255, 255, 255, 0.1); /* Subtle border for document feel */
+    border-radius: 12px;
+    overflow-x: hidden;
+}
+
+/* 1. Cinematic Index Top */
+.audit-landing {
+    display: flex;
+    justify-content: flex-start;
+    align-items: stretch;
+    padding-bottom: 48px;
+    border-bottom: 1px solid var(--border-subtle);
+    flex-wrap: wrap;
+    gap: 24px;
+}
+
+.index-score-box {
+    text-align: left;
+    min-width: 250px;
+}
+
+.index-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--text-tertiary);
+    margin-bottom: 12px;
+    display: block;
+}
+
+.header-card {
+    background: #080808;
+    border: 1px solid var(--border-subtle);
+    padding: 32px;
+    border-radius: 12px;
+    flex: 1;
+    min-width: 300px;
+}
+
+.index-value {
+    font-size: 3.5rem;
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 16px;
+    letter-spacing: -0.05em;
+    font-family: var(--font-mono);
+}
+
+.index-meter {
+    height: 3px;
+    background: var(--bg-tertiary);
+    width: 200px;
+}
+
+.index-progress {
+    height: 100%;
+    background: var(--accent);
+    box-shadow: 0 0 15px var(--accent-glow);
+}
+
+/* 2. Visual Audit Grid */
+.visual-audit-grid {
+    display: grid;
+    grid-template-columns: 1.2fr 0.8fr;
+    gap: 32px;
+    margin-top: 48px;
+}
+
+.radar-container {
+    min-height: 400px;
+    padding: 40px;
+    background: linear-gradient(135deg, #051010 0%, #0a1f1f 100%); /* Teal Pattern */
+    border: 1px solid rgba(20, 184, 166, 0.3);
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 40px rgba(20, 184, 166, 0.08);
+}
+
+.chart-box-sm {
+    height: 180px;
+    border-radius: 16px;
+    padding: 32px;
+    margin-bottom: 24px;
+}
+
+#volume-chart-box {
+    background: linear-gradient(135deg, #0a1125 0%, #001a33 100%); /* Navy Pattern */
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    box-shadow: 0 10px 40px rgba(56, 189, 248, 0.08);
+}
+
+#consistency-chart-box {
+    background: linear-gradient(135deg, #140a20 0%, #200a35 100%); /* Amethyst Pattern */
+    border: 1px solid rgba(192, 132, 252, 0.3);
+    box-shadow: 0 10px 40px rgba(192, 132, 252, 0.08);
+}
+
+/* 3. Primary Diagnostics (Summary + Toggle) */
+.diagnostics-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+}
+
+.diag-card {
+    display: flex;
+    gap: 24px;
+    padding: 32px;
+    background: #000;
+    border-top: 1px solid var(--border-subtle);
+    border-right: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--border-subtle);
+    border-left: 4px solid;
+}
+
+.diag-icon {
+    width: 40px;
+    height: 40px;
+    color: var(--text-tertiary);
+}
+
+.audit-svg-draw {
+    width: 100%;
+    height: 100%;
+}
+
+.diag-label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    margin-bottom: 8px;
+    display: block;
+}
+
+.diag-details summary {
+    font-size: 0.75rem;
+    color: var(--accent);
+    cursor: pointer;
+    margin-top: 12px;
+    text-transform: uppercase;
+}
+
+.diag-text {
+    margin-top: 16px;
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+/* 4. Psychological Findings (Interactive Flow) */
+.insights-audit-flow {
+    border: 1px solid var(--border-subtle);
+    padding: 32px;
+    cursor: pointer;
+    transition: var(--ease);
+}
+
+.insights-audit-flow:hover {
+    border-color: var(--text-tertiary);
+}
+
+.flow-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+
+.flow-preview {
+    transition: opacity 0.3s;
+}
+
+.flow-full {
+    display: none;
+    animation: fadeIn 0.4s;
+}
+
+.insights-audit-flow.expanded .flow-preview { display: none; }
+.insights-audit-flow.expanded .flow-full { display: block; }
+
+.data-audit-bar {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-secondary);
+    overflow: hidden;
+    padding: 12px;
+}
+
+/* 5. Linguistic Feedback */
+.patterns-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+}
+.pattern-card {
+    padding: 32px;
+    background: #080808;
+    border: 1px solid var(--border-subtle);
+    border-top: 2px solid var(--accent);
+    border-radius: 12px;
+}
+.pattern-phrase {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+/* 6. Strategic Directives */
+.directives-stack {
+    border-top: 1px solid var(--border-subtle);
+}
+.directive-entry {
+    display: flex;
+    padding: 32px 0;
+    border-bottom: 1px solid var(--border-subtle);
+    gap: 40px;
+    align-items: center;
+}
+.directive-idx {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+}
+.directive-text {
+    font-size: 1.05rem;
+    line-height: 1.6;
+    color: var(--text-primary);
+}
+.audit-footer {
+    display: flex;
+    padding-top: 48px;
+    border-top: 1px solid var(--border-subtle);
+}
+
+@media (max-width: 900px) {
+    .audit-landing { flex-direction: column; align-items: flex-start; gap: 40px; }
+    .visual-audit-grid { grid-template-columns: 1fr; }
+    .diagnostics-grid { grid-template-columns: 1fr; }
+    .insight-split { grid-template-columns: 1fr; }
+}
+
+@media print {
+    .report-text, .summary-value, .rec-text, .patterns-table td { color: #333 !important; }
+    .accordion-body { max-height: unset !important; }
+}

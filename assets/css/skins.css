@@ -1,0 +1,91 @@
+/* ==============================================
+   skins.css — 5 Personality Visual Themes
+   Applied on .chat-wrapper via JS
+   ============================================== */
+
+/* ---- 🔴 MICROMANAGER: Clinical / Sterile / Audited ---- */
+.skin-micromanager {
+    --skin-bg: #0e0e0e;
+    --skin-accent: #a0a0a0;
+    --skin-bubble-bg: #1a1a1a;
+    --skin-glow: rgba(160, 160, 160, 0.1);
+}
+.skin-micromanager .chat-messages { font-family: var(--font-mono); font-size: 14px; }
+.skin-micromanager .message-ai .message-bubble {
+    background: var(--skin-bubble-bg);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 2px;
+    font-weight: 400;
+}
+.skin-micromanager .pressure-fill { background: linear-gradient(to right, #666, #fff); }
+
+/* ---- 🟠 CONSPIRACY UNCLE: Warm Chaos / Sepia ---- */
+.skin-conspiracy {
+    --skin-bg: #0f0d08;
+    --skin-accent: #d4a017;
+    --skin-bubble-bg: #1c1810;
+    --skin-glow: rgba(212, 160, 23, 0.1);
+}
+.skin-conspiracy .message-ai .message-bubble {
+    background: var(--skin-bubble-bg);
+    border-left: 3px solid var(--skin-accent);
+    border-radius: var(--radius-md);
+}
+.skin-conspiracy .chat-container { max-width: 750px; }
+.skin-conspiracy .pressure-fill { background: linear-gradient(to right, #d4a017, #ff6b00); }
+
+/* ---- 🟡 INVESTOR: Aggressive / High Pressure / Black+Red ---- */
+.skin-investor {
+    --skin-bg: #080808;
+    --skin-accent: #EF4444;
+    --skin-bubble-bg: #1a0a0a;
+    --skin-glow: rgba(239, 68, 68, 0.15);
+}
+.skin-investor .message-ai .message-bubble {
+    background: var(--skin-bubble-bg);
+    border: 1px solid rgba(239, 68, 68, 0.15);
+    font-weight: 600;
+    font-size: 16px;
+}
+.skin-investor .message-ai {
+    align-self: flex-end; /* RIGHT-ALIGNED = dominance */
+    max-width: 85%;
+}
+.skin-investor .chat-input:focus { border-color: #EF4444; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12); }
+.skin-investor .pressure-fill { background: linear-gradient(to right, #EF4444, #B91C1C); }
+
+/* ---- 🔵 PASSIVE-AGGRESSIVE: Clean / Friendly Surface ---- */
+.skin-passive-aggressive {
+    --skin-bg: #0a0d12;
+    --skin-accent: #3B82F6;
+    --skin-bubble-bg: #0f1520;
+    --skin-glow: rgba(59, 130, 246, 0.1);
+}
+.skin-passive-aggressive .message-ai .message-bubble {
+    background: var(--skin-bubble-bg);
+    border-radius: var(--radius-xl);
+    padding: 16px 22px;
+}
+.skin-passive-aggressive .chat-input:focus { border-color: #3B82F6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12); }
+.skin-passive-aggressive .pressure-fill { background: linear-gradient(to right, #3B82F6, #60A5FA); }
+
+/* ---- 🟣 GUILT-TRIPPER: Emotional / Soft / Heavy ---- */
+.skin-guilt-tripper {
+    --skin-bg: #0d0a10;
+    --skin-accent: #A855F7;
+    --skin-bubble-bg: #150f1c;
+    --skin-glow: rgba(168, 85, 247, 0.12);
+}
+.skin-guilt-tripper .message-ai .message-bubble {
+    background: var(--skin-bubble-bg);
+    border-radius: 24px;
+    line-height: 1.8;
+    padding: 18px 24px;
+}
+.skin-guilt-tripper .chat-input:focus { border-color: #A855F7; box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.12); }
+.skin-guilt-tripper .pressure-fill { background: linear-gradient(to right, #A855F7, #C084FC); }
+
+/* ---- SKIN TRANSITION ---- */
+.chat-wrapper {
+    transition: background-color 0.6s var(--ease);
+}

@@ -1,0 +1,115 @@
+.dashboard-wrapper {
+    padding: 60px 24px;
+    background: #000;
+}
+
+.audit-pane {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 64px;
+    background: #000;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+}
+
+.dash-audit-header {
+    border-bottom: 2px solid var(--border-subtle);
+    padding-bottom: 24px;
+}
+
+.welcome-header {
+    font-size: 3rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 4px;
+}
+
+.data-audit-bar {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-secondary);
+}
+
+.audit-cell {
+    padding: 20px 24px;
+    border-right: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.audit-cell:last-child {
+    border-right: none;
+}
+
+.cell-label {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 8px;
+}
+
+.cell-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.sessions-section {
+    margin-top: 40px;
+}
+
+.sessions-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.session-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 0;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.session-topic {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.session-meta {
+    font-size: 0.8rem;
+    font-family: var(--font-mono);
+    color: var(--text-tertiary);
+}
+
+.session-actions {
+    display: flex;
+    align-items: center;
+}
+
+.btn-text {
+    color: var(--accent);
+    font-weight: 700;
+    text-decoration: none;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    transition: var(--ease);
+}
+
+.btn-text:hover {
+    color: var(--text-primary);
+    transform: translateX(4px);
+}
+
+@media (max-width: 768px) {
+    .data-audit-bar { grid-template-columns: 1fr; border-right: none; }
+    .audit-cell { border-right: none; border-bottom: 1px solid var(--border-subtle); }
+    .welcome-header { font-size: 2.2rem; }
+    .session-item { flex-direction: column; align-items: flex-start; gap: 16px; }
+}
