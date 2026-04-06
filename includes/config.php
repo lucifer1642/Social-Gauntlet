@@ -31,7 +31,13 @@ define('GEMINI_API_URL', 'https://generativelanguage.googleapis.com/v1beta/model
 
 // App constants
 define('APP_NAME', 'The Social Gauntlet');
-define('BASE_URL', '/p1');
+
+// Dynamic BASE_URL calculation
+$projectRoot = str_replace('\\', '/', realpath(__DIR__ . '/..'));
+$docRoot = str_replace('\\', '/', realpath($_SERVER['DOCUMENT_ROOT'] ?? ''));
+$baseDir = str_replace($docRoot, '', $projectRoot);
+$baseDir = rtrim($baseDir, '/');
+define('BASE_URL', $baseDir);
 define('MAX_EXCHANGES_PER_ROUND', 6);
 define('MIN_EXCHANGES_PER_ROUND', 4);
 define('TOTAL_ROUNDS', 5);
