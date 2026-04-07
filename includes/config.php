@@ -33,10 +33,23 @@ define('GEMINI_API_URL', 'https://generativelanguage.googleapis.com/v1beta/model
 define('APP_NAME', 'The Social Gauntlet');
 
 // Dynamic BASE_URL calculation
-$projectRoot = str_replace('\\', '/', realpath(__DIR__ . '/..'));
-$docRoot = str_replace('\\', '/', realpath($_SERVER['DOCUMENT_ROOT'] ?? ''));
-$baseDir = str_replace($docRoot, '', $projectRoot);
-$baseDir = rtrim($baseDir, '/');
+$scriptPath = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
+$baseDir = '';
+
+// List of known subdirectories to strip to find the project root
+$subfolders = ['/app/', '/auth/', '/api/', '/includes/', '/sql/'];
+foreach ($subfolders as $folder) {
+    if (($pos = strpos($scriptPath, $folder)) !== false) {
+        $baseDir = substr($scriptPath, 0, $pos);
+        break;
+    }
+}
+
+// Fallback for root-level files (like index.php)
+if ($baseDir === '' && $scriptPath !== '') {
+    $baseDir = rtrim(dirname($scriptPath), '/');
+}
+
 define('BASE_URL', $baseDir);
 define('MAX_EXCHANGES_PER_ROUND', 6);
 define('MIN_EXCHANGES_PER_ROUND', 4);
