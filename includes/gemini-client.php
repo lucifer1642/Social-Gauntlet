@@ -55,10 +55,10 @@ function sendToGemini($systemPrompt, $conversationHistory, $model = null) {
             'maxOutputTokens' => 800
         ],
         'safetySettings' => [
-            ['category' => 'HARM_CATEGORY_HARASSMENT', 'threshold' => 'BLOCK_NONE'],
-            ['category' => 'HARM_CATEGORY_HATE_SPEECH', 'threshold' => 'BLOCK_NONE'],
-            ['category' => 'HARM_CATEGORY_SEXUALLY_EXPLICIT', 'threshold' => 'BLOCK_NONE'],
-            ['category' => 'HARM_CATEGORY_DANGEROUS_CONTENT', 'threshold' => 'BLOCK_NONE']
+            ['category' => 'HARM_CATEGORY_HARASSMENT', 'threshold' => 'BLOCK_ONLY_HIGH'],
+            ['category' => 'HARM_CATEGORY_HATE_SPEECH', 'threshold' => 'BLOCK_ONLY_HIGH'],
+            ['category' => 'HARM_CATEGORY_SEXUALLY_EXPLICIT', 'threshold' => 'BLOCK_ONLY_HIGH'],
+            ['category' => 'HARM_CATEGORY_DANGEROUS_CONTENT', 'threshold' => 'BLOCK_ONLY_HIGH']
         ]
     ];
     
@@ -79,6 +79,9 @@ function sendToGemini($systemPrompt, $conversationHistory, $model = null) {
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
     curl_setopt($ch, CURLOPT_TIMEOUT, 40); // Increased timeout for analysis
     
+    // XAMPP SSL Fix: Disable verification for local testing if necessary
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $curlError = curl_error($ch);
@@ -91,6 +94,10 @@ function sendToGemini($systemPrompt, $conversationHistory, $model = null) {
     
     if ($httpCode !== 200) {
         error_log("Gemini API HTTP {$httpCode} for model {$model}: " . $response);
+        // Fallback for debugging (optional: could echo for local testing)
+        if (ini_get('display_errors')) {
+            // error_log("FULL PAYLOAD: " . json_encode($payload));
+        }
         return false;
     }
     
@@ -98,7 +105,11 @@ function sendToGemini($systemPrompt, $conversationHistory, $model = null) {
     
     // Check if parts exist (if not, it might have been blocked despite settings)
     if (!isset($data['candidates'][0]['content']['parts'][0]['text'])) {
-        error_log("Gemini API missing text content for model {$model}: " . $response);
+        error_log("Gemini API missing text content for model {$model}. Data: " . $response);
+        // Check for finishReason
+        if (isset($data['candidates'][0]['finishReason'])) {
+            error_log("Gemini block reason: " . $data['candidates'][0]['finishReason']);
+        }
         return false;
     }
     

@@ -186,3 +186,28 @@ function getPriorUserMessages($sessionId, $currentRoundNumber) {
     $stmt->execute([$sessionId, $currentRoundNumber]);
     return $stmt->fetchAll();
 }
+
+/**
+ * Delete a session (and cascade delete rounds/messages if database doesn't auto cascade)
+ */
+function deleteSession($sessionId, $userId) {
+    $db = getDB();
+    
+    // Delete messages in all rounds of this session
+    $stmt = $db->prepare('DELETE FROM messages WHERE round_id IN (SELECT id FROM rounds WHERE session_id = ?)');
+    $stmt->execute([$sessionId]);
+    
+    // Delete rounds
+    $stmt = $db->prepare('DELETE FROM rounds WHERE session_id = ?');
+    $stmt->execute([$sessionId]);
+    
+    // Delete reports
+    $stmt = $db->prepare('DELETE FROM reports WHERE session_id = ?');
+    $stmt->execute([$sessionId]);
+
+    // Finally, delete the session itself
+    $stmt = $db->prepare('DELETE FROM sessions WHERE id = ? AND user_id = ?');
+    $stmt->execute([$sessionId, $userId]);
+    
+    return $stmt->rowCount() > 0;
+}

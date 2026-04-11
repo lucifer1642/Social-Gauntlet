@@ -11,31 +11,48 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: opacity 0.5s ease;
+    transition: opacity 0.8s ease-in-out;
 }
-.transition-sequence { text-align: center; }
+.transition-sequence { 
+    text-align: center; 
+    position: relative; 
+    width: 100%;
+    height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
 .trans-step {
     opacity: 0;
-    transform: translateY(10px);
-    transition: all 0.5s var(--ease);
-    font-size: 20px;
+    transform: translateY(20px) scale(0.95);
+    filter: blur(10px);
+    transition: all 0.7s var(--ease);
+    font-size: 1.25rem;
     color: var(--text-secondary);
     position: absolute;
-    width: 100vw;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
     text-align: center;
     font-family: var(--font-mono);
-    letter-spacing: 0.05em;
+    letter-spacing: 0.2rem;
+    text-transform: uppercase;
 }
 .trans-step.visible {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
+    filter: blur(0);
 }
 .trans-persona {
     font-family: var(--font-body) !important;
-    font-size: 48px !important;
-    font-weight: 800 !important;
+    font-size: 3.5rem !important;
+    font-weight: 900 !important;
     color: var(--text-primary) !important;
-    letter-spacing: -0.03em !important;
+    letter-spacing: -0.05em !important;
+    text-transform: none !important;
+    text-shadow: 0 0 40px rgba(124, 58, 237, 0.4);
 }
 
 /* ---- CHAT WRAPPER ---- */

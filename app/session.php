@@ -15,7 +15,7 @@ if ($session['status'] === 'completed') { header('Location: ' . BASE_URL . '/app
 
 $currentRound = $session['current_round'];
 $personality = getPersonalityForRound($currentRound);
-$topicDisplay = $session['custom_topic'] ?: $session['topic'];
+$topicDisplay = getTopicTitle($session['topic'], $session['custom_topic']);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -26,6 +26,7 @@ $topicDisplay = $session['custom_topic'] ?: $session['topic'];
     <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/global.css">
     <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/chat.css">
     <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/skins.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -163,25 +164,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Step 1: show round number
     s1.classList.add('visible');
+    
+    // Staggered cinematic sequence
     setTimeout(() => {
         s1.classList.remove('visible');
-        s2.classList.add('visible'); // "Entering next room..."
-    }, 1500);
+        setTimeout(() => s2.classList.add('visible'), 300); // "Entering next room..."
+    }, 1800);
+
     setTimeout(() => {
         s2.classList.remove('visible');
-        s3.classList.add('visible'); // Persona name
-    }, 2500);
+        setTimeout(() => s3.classList.add('visible'), 400); // Persona name
+    }, 3200);
+
     setTimeout(() => {
         screen.style.opacity = '0';
         setTimeout(() => {
             screen.style.display = 'none';
             const wrapper = document.getElementById('chatWrapper');
             wrapper.style.display = 'flex';
-            wrapper.style.opacity = '1';
-            applySkin(round);
-            loadRound();
-        }, 500);
-    }, 3500);
+            setTimeout(() => {
+                wrapper.style.opacity = '1';
+                applySkin(round);
+                loadRound();
+            }, 100);
+        }, 1200);
+    }, 6500);
 
     // Auto-resize textarea
     const input = document.getElementById('userInput');

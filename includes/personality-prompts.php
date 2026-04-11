@@ -19,6 +19,21 @@ function getPresetTopics() {
 }
 
 /**
+ * Get human-readable title for a topic (slug or custom)
+ */
+function getTopicTitle($slug, $custom = null) {
+    if ($slug === 'custom' && !empty($custom)) {
+        return $custom;
+    }
+    foreach (getPresetTopics() as $t) {
+        if ($t['slug'] === $slug) {
+            return $t['title'];
+        }
+    }
+    return $slug ?: 'Untitled Session';
+}
+
+/**
  * Get topic string for the AI prompt
  */
 function getTopicContextForAI($slug, $customTopic) {
@@ -87,6 +102,19 @@ function getPersonalityClass($id) {
         5 => 'guilt-tripper'
     ];
     return $classes[$id] ?? '';
+}
+
+/**
+ * Get all personality details for a specific round/ID
+ */
+function getPersonalityForRound($id) {
+    return [
+        'id'     => $id,
+        'name'   => getPersonalityName($id),
+        'emoji'  => getPersonalityEmoji($id),
+        'avatar' => getPersonalityAvatar($id),
+        'class'  => getPersonalityClass($id)
+    ];
 }
 
 /**

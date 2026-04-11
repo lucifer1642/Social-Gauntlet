@@ -45,6 +45,21 @@
     --ease: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* ---- LIGHT MODE OVERRIDES ---- */
+:root.light-mode {
+    --bg-primary: #f8fafc;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #f1f5f9;
+    --bg-glass: rgba(255, 255, 255, 0.85);
+
+    --text-primary: #0f172a;
+    --text-secondary: #334155;
+    --text-tertiary: #64748b;
+
+    --border-subtle: rgba(0, 0, 0, 0.1);
+    --border-glow: rgba(14, 165, 233, 0.5);
+}
+
 /* ---- BASE ---- */
 html {
     font-size: 16px;

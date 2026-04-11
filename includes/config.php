@@ -25,8 +25,8 @@ define('DB_PASS', $_ENV['DB_PASS'] ?? '');
 
 // Gemini API
 define('GEMINI_API_KEY', $_ENV['GEMINI_API_KEY'] ?? '');
-define('GEMINI_MODEL_CHAT', 'gemini-2.0-flash');
-define('GEMINI_MODEL_ANALYSIS', 'gemma-3-27b-it');
+define('GEMINI_MODEL_CHAT', 'gemini-1.5-flash');
+define('GEMINI_MODEL_ANALYSIS', 'gemini-1.5-flash');
 define('GEMINI_API_URL', 'https://generativelanguage.googleapis.com/v1beta/models/');
 
 // App constants

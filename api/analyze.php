@@ -73,39 +73,36 @@ $formattedTranscript .= "\n--- BEHAVIORAL DATA ---\n";
 $formattedTranscript .= json_encode($metrics, JSON_PRETTY_PRINT);
 
 // Analysis prompt
-$analysisPrompt = "You are a communication psychologist analyzing a stress test transcript. The subject went through 5 back-to-back conversations with different difficult personality types, all about the same topic.
+$analysisPrompt = "You are a communication psychologist performing a high-fidelity behavioral audit. You have been provided with a transcript of 5 high-pressure rounds where the subject (USER) interacted with distinct difficult personalities.
 
-Analyze this transcript for patterns of:
-1. Defensiveness (message length increasing after pushback)
-2. Over-explanation (repeating the same point in different words)
-3. Boundary collapse (abandoning stated positions under pressure)
-4. Emotional reactivity (matching the aggressor's tone)
-5. Clarity under pressure (whether key points survive escalation)
-6. Permission-seeking language ('I might be wrong but', 'I think at least', hedging phrases)
-7. Question-asking ratio (do they ask questions back or only defend?)
-8. Hesitation patterns (response time spikes)
+Your goal is to provide a uniquely tailored analysis. DO NOT give generic advice. You MUST:
+1. Reference specific quotes from the subject in each round.
+2. Analyze how their language evolved between Round 1 (Boss) and Round 5 (Guilt-Tripper).
+3. Identify a 'Linguistic Fingerprint' — unique phrases or verbal tics they used only when stressed.
+4. Calculate and mention specific percentage shifts in response volume or velocity.
+5. Provide actionable strategic directives that are specific to the topic discussed ({$topicDisplay}).
 
 You MUST respond in EXACTLY this JSON format and nothing else:
 {
-    \"strongest_under\": \"One paragraph describing what type of pressure the user handled best and why. Reference specific exchanges.\",
-    \"biggest_vulnerability\": \"One paragraph describing their biggest communication weakness with specific evidence. Include percentage changes if applicable.\",
-    \"blind_spot\": \"One paragraph about what they completely missed or misread. Include specific examples.\",
-    \"pattern_summary\": \"One paragraph about recurring patterns across all 5 rounds. List specific phrases they repeated with counts.\",
-    \"emotional_tripwire\": \"One paragraph about what emotionally destabilized them the most with evidence.\",
+    \"strongest_under\": \"One detailed paragraph describing the exact persona or type of pressure the user handled best. Quote a specific exchange where they showed strength.\",
+    \"biggest_vulnerability\": \"One detailed paragraph identifying their primary failure point. Use metrics (e.g., 'Response length increased by 40% when challenged') and quote their weakest moment.\",
+    \"blind_spot\": \"One paragraph about a subtext or emotional cue they completely missed in the AI's dialogue. Be specific about which round and which quote they misread.\",
+    \"pattern_summary\": \"Analyze recurring linguistic patterns. List 3 specific phrases they used repeatedly and explain the psychological underlying cause for each.\",
+    \"emotional_tripwire\": \"Identify the exact moment/sentence from an AI persona that caused the subject to lose composure or clarity. Explain why that specific trigger worked.\",
     \"recommendations\": [
-        \"First specific actionable recommendation\",
-        \"Second specific actionable recommendation\",
-        \"Third specific actionable recommendation\"
+        \"A strategic directive specific to the topic ({$topicDisplay})\",
+        \"A linguistic adjustment based on their detected patterns\",
+        \"A psychological technique to counter their biggest detected vulnerability\"
     ],
     \"round_analyses\": [
-        {\"round\": 1, \"personality\": \"Micromanager\", \"performance\": \"Brief analysis of how they handled this specific personality\", \"key_moment\": \"Quote of the most revealing exchange\"},
-        {\"round\": 2, \"personality\": \"Conspiracy Uncle\", \"performance\": \"...\", \"key_moment\": \"...\"},
-        {\"round\": 3, \"personality\": \"Investor\", \"performance\": \"...\", \"key_moment\": \"...\"},
-        {\"round\": 4, \"personality\": \"Passive-Aggressive\", \"performance\": \"...\", \"key_moment\": \"...\"},
-        {\"round\": 5, \"personality\": \"Guilt-Tripper\", \"performance\": \"...\", \"key_moment\": \"...\"}
+        {\"round\": 1, \"personality\": \"Micromanager\", \"performance\": \"Analysis with a quote\", \"key_moment\": \"Revealing quote\"},
+        {\"round\": 2, \"personality\": \"Conspiracy Uncle\", \"performance\": \"Analysis with a quote\", \"key_moment\": \"Revealing quote\"},
+        {\"round\": 3, \"personality\": \"Investor\", \"performance\": \"Analysis with a quote\", \"key_moment\": \"Revealing quote\"},
+        {\"round\": 4, \"personality\": \"Passive-Aggressive\", \"performance\": \"Analysis with a quote\", \"key_moment\": \"Revealing quote\"},
+        {\"round\": 5, \"personality\": \"Guilt-Tripper\", \"performance\": \"Analysis with a quote\", \"key_moment\": \"Revealing quote\"}
     ],
     \"language_patterns\": [
-        {\"phrase\": \"detected phrase or pattern\", \"count\": 0, \"context\": \"what this reveals about their communication\"}
+        {\"phrase\": \"exact phrase used\", \"count\": 0, \"context\": \"what this specific repetition reveals about their state\"}
     ]
 }";
 

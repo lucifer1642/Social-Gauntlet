@@ -9,6 +9,22 @@ $user = getCurrentUser();
 $presetTopics = getPresetTopics();
 $error = '';
 
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && !empty(trim($_GET['prefill'] ?? ''))) {
+    $prefill = trim($_GET['prefill']);
+    $presetSlug = '';
+    foreach ($presetTopics as $t) {
+        if (strcasecmp($t['title'], $prefill) === 0 || strcasecmp($t['slug'], $prefill) === 0) {
+            $presetSlug = $t['slug'];
+            break;
+        }
+    }
+    $topicSlug = $presetSlug ?: 'custom';
+    $customTopic = $presetSlug ? null : $prefill;
+    $sessionId = createSession($user['id'], $topicSlug, $customTopic);
+    header('Location: ' . BASE_URL . '/app/session.php?session_id=' . $sessionId);
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $topic = trim($_POST['topic'] ?? '');
     $customTopic = trim($_POST['custom_topic'] ?? '');

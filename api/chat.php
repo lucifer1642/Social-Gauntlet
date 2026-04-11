@@ -155,10 +155,14 @@ foreach ($allMessages as $msg) {
 // Send to Gemini with FULL conversation history
 $aiResponse = sendToGemini($systemPrompt, $conversationHistory);
 
-if ($aiResponse === false) {
-    echo json_encode(['error' => 'AI service unavailable. Please try again.']);
-    exit;
-}
+    if ($aiResponse === false) {
+        $errorMsg = 'AI service unavailable.';
+        if (ini_get('display_errors')) {
+            $errorMsg .= ' Check PHP error logs for Gemini API connectivity issues.';
+        }
+        echo json_encode(['error' => $errorMsg . ' Please try again.']);
+        exit;
+    }
 
 // Save AI response
 saveMessage($round['id'], 'assistant', $aiResponse);
