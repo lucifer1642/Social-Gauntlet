@@ -1,6 +1,8 @@
 /* ==============================================
    landing.css — Cinematic Landing
    ============================================== */
+@import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&display=swap');
+
 
 /* ---- HERO — Full viewport with animated gradient ---- */
 .hero {
@@ -12,35 +14,67 @@
     overflow: hidden;
 }
 
-/* Animated gradient background with more vibrant colors */
-/* Animated gradient background with ultra vibrant neon colors */
 .hero-gradient {
     position: absolute;
-    inset: -50%;
-    width: 200%;
-    height: 200%;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    background: #050505;
+    background-image: radial-gradient(ellipse at center, rgba(234, 179, 8, 0.15) 0%, transparent 60%);
+    animation: pulseCore 6s ease-in-out infinite alternate;
+}
+
+@keyframes pulseCore {
+    0% { opacity: 0.5; transform: scale(0.9); }
+    100% { opacity: 1; transform: scale(1.1); }
+}
+
+/* Laser scanline and subtle background grid */
+.hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
     background: 
-        radial-gradient(ellipse at 30% 40%, rgba(255, 0, 170, 0.45) 0%, transparent 45%),
-        radial-gradient(ellipse at 70% 60%, rgba(0, 255, 204, 0.45) 0%, transparent 45%),
-        radial-gradient(ellipse at 50% 90%, rgba(0, 85, 255, 0.5) 0%, transparent 45%),
-        var(--bg-primary);
-    animation: gradientShift 8s ease infinite;
-    background-size: 200% 200%;
+        linear-gradient(to bottom, transparent 48%, rgba(234, 179, 8, 0.5) 50%, transparent 52%),
+        linear-gradient(rgba(234, 179, 8, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(234, 179, 8, 0.03) 1px, transparent 1px);
+    background-size: 100% 200%, 40px 40px, 40px 40px;
+    background-repeat: no-repeat, repeat, repeat;
+    opacity: 0.6;
+    animation: scannerSweep 5s linear infinite;
+    pointer-events: none;
+    z-index: 1;
+    mask-image: radial-gradient(ellipse at center, black 10%, transparent 80%);
+    -webkit-mask-image: radial-gradient(ellipse at center, black 10%, transparent 80%);
+}
+
+@keyframes scannerSweep {
+    0% { background-position: 0 -100%, 0 0, 0 0; }
+    100% { background-position: 0 200%, 0 0, 0 0; }
 }
 
 /* High-tech grid overlay for depth */
 .hero::after {
     content: '';
     position: absolute;
-    inset: 0;
+    inset: -50%;
+    width: 200%;
+    height: 200%;
+    /* Neon yellow diagonal strokes */
     background-image: 
-        linear-gradient(rgba(124, 58, 237, 0.06) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(124, 58, 237, 0.06) 1px, transparent 1px);
-    background-size: 48px 48px;
-    mask-image: radial-gradient(ellipse at center, black 10%, transparent 80%);
-    -webkit-mask-image: radial-gradient(ellipse at center, black 10%, transparent 80%);
-    z-index: 1;
+        linear-gradient(45deg, rgba(234, 179, 8, 0.04) 25%, transparent 25%, transparent 50%, rgba(234, 179, 8, 0.04) 50%, rgba(234, 179, 8, 0.04) 75%, transparent 75%, transparent);
+    background-size: 80px 80px;
+    opacity: 0.8;
+    animation: slideStrokes 15s linear infinite;
     pointer-events: none;
+    z-index: 1;
+    mask-image: radial-gradient(ellipse at center, black 10%, transparent 70%);
+    -webkit-mask-image: radial-gradient(ellipse at center, black 10%, transparent 70%);
+}
+
+@keyframes slideStrokes {
+    0% { background-position: 0 0; }
+    100% { background-position: -80px -80px; }
 }
 
 .hero-content {
@@ -52,12 +86,72 @@
     animation: fadeIn 0.8s var(--ease) forwards;
 }
 
+/* Animated Cyber Frame for Hero Badge */
+.hero-content .badge-label {
+    display: inline-block;
+    font-size: 13px; /* make it larger */
+    letter-spacing: 0.15em;
+    color: #eab308; /* yellow accent */
+    padding: 8px 24px;
+    background: rgba(234, 179, 8, 0.05);
+    border: 1px solid rgba(234, 179, 8, 0.3);
+    border-radius: 50px;
+    backdrop-filter: blur(8px);
+    text-shadow: 0 0 10px rgba(234, 179, 8, 0.4);
+    animation: cyberBadgePulse 3s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
+}
+
+@keyframes cyberBadgePulse {
+    0% { 
+        border-color: rgba(234, 179, 8, 0.2); 
+        box-shadow: 0 0 10px rgba(234, 179, 8, 0.05), inset 0 0 5px rgba(234, 179, 8, 0.02);
+        transform: translateY(0);
+    }
+    100% { 
+        border-color: rgba(234, 179, 8, 0.7); 
+        box-shadow: 0 0 25px rgba(234, 179, 8, 0.25), inset 0 0 15px rgba(234, 179, 8, 0.1);
+        transform: translateY(-2px);
+    }
+}
+
 .hero-title {
-    font-size: 4.5rem;
-    font-weight: 800;
-    letter-spacing: -0.03em;
-    line-height: 1.05;
+    font-family: 'Dancing Script', cursive;
+    font-size: 5.5rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    line-height: 1.25;
     margin-bottom: 24px;
+    color: var(--text-primary);
+    text-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+    
+    /* Writing animation across the text */
+    -webkit-clip-path: polygon(0 0, 0 0, 0 100%, 0 100%);
+    clip-path: polygon(0 0, 0 0, 0 100%, 0 100%);
+    
+    /* Add infinite neon glow loop that starts after write-in (0.5s delay + 2.5s duration = 3s start) */
+    animation: 
+        writeOnScreen 2.5s cubic-bezier(0.4, 0, 0.2, 1) 0.5s forwards,
+        neonTextPulse 3.5s ease-in-out infinite alternate 3s;
+}
+
+@keyframes writeOnScreen {
+    0% { 
+        -webkit-clip-path: polygon(0 0, 0% 0, 0% 100%, 0 100%);
+        clip-path: polygon(0 0, 0% 0, 0% 100%, 0 100%);
+    }
+    100% { 
+        -webkit-clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+        clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+    }
+}
+
+@keyframes neonTextPulse {
+    0% {
+        text-shadow: 0 2px 4px rgba(0,0,0,0.8), 0 0 2px rgba(14, 165, 233, 0.2);
+    }
+    100% {
+        text-shadow: 0 2px 4px rgba(0,0,0,0.8), 0 0 8px rgba(14, 165, 233, 0.4), 0 0 12px rgba(0, 255, 204, 0.2);
+    }
 }
 
 .hero-subtitle {
@@ -77,7 +171,53 @@
 
 /* ---- HOW IT WORKS ---- */
 .how-section {
+    position: relative;
     padding: 120px 0;
+    overflow: hidden;
+}
+
+.how-section::before {
+    content: '';
+    position: absolute;
+    inset: -50%;
+    width: 200%;
+    height: 200%;
+    background: 
+        radial-gradient(ellipse at 40% 50%, rgba(14, 165, 233, 0.05) 0%, transparent 50%),
+        radial-gradient(ellipse at 60% 30%, rgba(124, 58, 237, 0.04) 0%, transparent 50%);
+    animation: rotateOrb 20s linear infinite;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.how-section::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    /* High-tech micro dot matrix */
+    background-image: radial-gradient(circle, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+    background-size: 30px 30px;
+    opacity: 0.5;
+    animation: driftGrid 12s linear infinite;
+    pointer-events: none;
+    z-index: 0;
+    mask-image: linear-gradient(to bottom, transparent, black 20%, black 80%, transparent);
+    -webkit-mask-image: linear-gradient(to bottom, transparent, black 20%, black 80%, transparent);
+}
+
+@keyframes rotateOrb {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+@keyframes driftGrid {
+    0% { background-position: 0 0; }
+    100% { background-position: 0 -30px; } /* Matches background-size vertical for infinite loop */
+}
+
+.how-section .container {
+    position: relative;
+    z-index: 2;
 }
 
 .steps-grid {
@@ -196,3 +336,25 @@
     .custom-input-wrap { flex-direction: column; padding: 16px; }
     .hero-ctas { flex-direction: column; align-items: center; }
 }
+
+/* ---- SCROLL REVEAL ANIMATIONS ---- */
+.reveal-up {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.reveal-scale {
+    opacity: 0;
+    transform: scale(0.92);
+    transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.reveal-visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+.stagger-1 { transition-delay: 0.1s; }
+.stagger-2 { transition-delay: 0.2s; }
+.stagger-3 { transition-delay: 0.3s; }
+.stagger-4 { transition-delay: 0.4s; }
+.stagger-5 { transition-delay: 0.5s; }

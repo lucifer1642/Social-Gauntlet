@@ -43,7 +43,7 @@ $extraCss = ['select-topic.css'];
 include __DIR__ . '/../includes/header.php';
 ?>
 
-<div class="topic-wrapper">
+<div class="topic-wrapper" id="mainContent">
     <div class="container">
         <div class="text-center mb-7">
             <div class="badge-label mb-3">SCENARIO SELECTION</div>

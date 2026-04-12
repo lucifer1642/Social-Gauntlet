@@ -21,7 +21,7 @@ $user = getCurrentUser();
             <div class="nav-links">
                 <?php if ($loggedIn): ?>
                     <a href="<?= BASE_URL ?>/app/dashboard.php">Dashboard</a>
-                    <a href="<?= BASE_URL ?>/app/select-topic.php" class="btn btn-primary btn-sm">Take Test</a>
+                    <a href="<?= BASE_URL ?>/app/select-topic.php" class="btn btn-neon btn-sm">Take Test</a>
                     <div class="user-menu">
                         <span class="user-name"><?= htmlspecialchars($user['username']) ?></span>
                         <a href="<?= BASE_URL ?>/auth/logout.php" class="logout-link">Logout</a>

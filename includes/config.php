@@ -23,10 +23,14 @@ define('DB_NAME', $_ENV['DB_NAME'] ?? 'personality_stress_tester');
 define('DB_USER', $_ENV['DB_USER'] ?? 'root');
 define('DB_PASS', $_ENV['DB_PASS'] ?? '');
 
-// Gemini API
-define('GEMINI_API_KEY', $_ENV['GEMINI_API_KEY'] ?? '');
-define('GEMINI_MODEL_CHAT', 'gemini-1.5-flash');
-define('GEMINI_MODEL_ANALYSIS', 'gemini-1.5-flash');
+// AI API — Chat (NVIDIA NIM / Qwen 3)
+define('NVIDIA_API_KEY', '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');
+define('NVIDIA_MODEL_CHAT', 'qwen/qwen3-next-80b-a3b-instruct');
+define('NVIDIA_API_URL', 'https://integrate.api.nvidia.com/v1/chat/completions');
+
+// AI API — Reports & Audit (Google Gemini)
+define('GEMINI_API_KEY', $_ENV['GEMINI_API_KEY'] ?? 'AIzaSyDF53KW3r1VscwedURfERiD7WTc5wfxFpU');
+define('GEMINI_MODEL_ANALYSIS', 'gemini-2.0-flash');
 define('GEMINI_API_URL', 'https://generativelanguage.googleapis.com/v1beta/models/');
 
 // App constants
