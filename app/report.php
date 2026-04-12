@@ -20,92 +20,105 @@ if (!$report) {
 
 $topicDisplay = getTopicTitle($session['topic'], $session['custom_topic']);
 $analysis = json_decode($report['analysis_json'], true);
-$recommendations = json_decode($report['recommendations_json'], true);
-$transcript = getFullTranscript($sessionId);
 $date = date('F j, Y', strtotime($session['started_at']));
 
-function getDrawing($type) {
-    if ($type === 'strong') return '<svg viewBox="0 0 24 24" class="audit-svg-draw"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z" fill="currentColor"/></svg>';
-    return '<svg viewBox="0 0 24 24" class="audit-svg-draw"><circle cx="12" cy="12" r="10" stroke="currentColor" fill="none" stroke-width="1.5" stroke-dasharray="2 4"/><path d="M12 8v4M12 16h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+// ========== ALL DATA FROM $analysis (AI-generated) ==========
+// Text insights
+// Helper to ensure text fields returned as arrays by the AI are converted to clean strings
+function ensureString($val) {
+    if (is_array($val)) {
+        return implode(' ', array_map(function($v) { 
+            if (is_array($v)) {
+                // If it's a structured object (like a pattern)
+                if (isset($v['phrase'])) {
+                    $str = '"' . $v['phrase'] . '"';
+                    if (isset($v['context'])) $str .= " — " . $v['context'];
+                    return $str . ".";
+                }
+                // Fallback for other objects
+                return implode(', ', array_filter($v, 'is_scalar')) . '.';
+            }
+            return trim($v) . '.'; 
+        }, array_filter($val)));
+    }
+    return $val ?? 'Analysis data not available.';
 }
 
-function formatAsPointers($text, $skipFirst = false) {
-    if (empty($text)) return 'No data available.';
-    $sentences = explode('. ', $text);
+$strongestUnder  = ensureString($analysis['strongest_under'] ?? null);
+$biggestVuln     = ensureString($analysis['biggest_vulnerability'] ?? null);
+$blindSpot       = ensureString($analysis['blind_spot'] ?? null);
+$patternSummary  = ensureString($analysis['pattern_summary'] ?? null);
+$emotionalTrip   = ensureString($analysis['emotional_tripwire'] ?? null);
+$recommendations = $analysis['recommendations'] ?? ['Complete a full gauntlet session for analysis.'];
+$patterns        = $analysis['language_patterns'] ?? [];
+$roundAnalyses   = $analysis['round_analyses'] ?? [];
+
+// Chart data (all AI-scored)
+$cd = $analysis['chart_data'] ?? [];
+$pr = $cd['persona_resistance'] ?? [];
+$pp = $cd['psych_profile'] ?? [];
+$lp = $cd['linguistic_profile'] ?? [];
+$rc = $cd['reaction_consistency'] ?? [];
+$bs = $cd['blind_spot_radar'] ?? [];
+$tr = $cd['trigger_radar'] ?? [];
+
+$stressResistanceScore = intval($cd['stress_resistance_index'] ?? 0);
+
+function getChartVal($arr, $preferredKey) {
+    if (!$arr || !is_array($arr)) return 0;
+    $map = [
+        'boss' => ['boss', 'micromanager'],
+        'uncle' => ['uncle', 'conspiracy'],
+        'investor' => ['investor', 'aggressive'],
+        'coworker' => ['coworker', 'passive'],
+        'guilt_tripper' => ['guilt_tripper', 'guilt_trripper', 'emotional']
+    ];
+    $keysToTry = $map[$preferredKey] ?? [$preferredKey];
+    foreach ($arr as $k => $v) {
+        $lk = str_replace(['-', ' '], '_', strtolower($k));
+        foreach ($keysToTry as $kt) {
+            if (strpos($lk, $kt) !== false) return intval($v);
+        }
+    }
+    return intval($arr[$preferredKey] ?? 0);
+}
+
+$radarData = [getChartVal($pr, 'boss'), getChartVal($pr, 'uncle'), getChartVal($pr, 'investor'), getChartVal($pr, 'coworker'), getChartVal($pr, 'guilt_tripper')];
+$psychDataPHP = [intval($pp['defensiveness']??0), intval($pp['adaptability']??0), intval($pp['anxiety']??0), intval($pp['logic_focus']??0), intval($pp['empathy']??0)];
+$lingDataPHP = [intval($lp['tone_control']??0), intval($lp['complexity']??0), intval($lp['assertiveness']??0), intval($lp['empathy']??0), intval($lp['formality']??0)];
+$reactDataPHP = [getChartVal($rc, 'boss'), getChartVal($rc, 'uncle'), getChartVal($rc, 'investor'), getChartVal($rc, 'coworker'), getChartVal($rc, 'guilt_tripper')];
+$bsRadarDataPHP = [intval($bs['awareness']??0), intval($bs['impact']??0), intval($bs['recurrence']??0)];
+$triggerRadarDataPHP = [intval($tr['volatility']??0), intval($tr['frequency']??0), intval($tr['severity']??0)];
+
+$s1 = $stressResistanceScore > 0 ? $stressResistanceScore : max(1, intval(array_sum($radarData) / max(1, count($radarData))));
+$s2 = max(1, intval(($psychDataPHP[0] + $psychDataPHP[2]) / 2));
+
+// ========== HELPER ==========
+function extractHeading($text, $maxLen = 80) {
+    $head = explode('.', $text)[0];
+    if (mb_strlen($head) > $maxLen) $head = mb_substr($head, 0, $maxLen - 3) . '...';
+    return $head;
+}
+
+function formatAsPointers($text, $skipFirst = false, $maxItems = 4) {
+    if (empty($text) || $text === 'Analysis data not available.') return '<p style="color:var(--text-tertiary);font-style:italic;">Analysis data not available for this section.</p>';
+    $sentences = preg_split('/(?<=[.!?])\s+/', $text);
     $html = '<ul style="list-style-type: square; padding-left: 1.2rem; margin-top: 0.8rem; display: flex; flex-direction: column; gap: 0.5rem; color: var(--text-secondary); line-height: 1.5;">';
+    $count = 0;
     $isFirst = true;
     foreach ($sentences as $s) {
         $s = trim($s);
         if (empty($s)) continue;
-        if ($skipFirst && $isFirst) {
-            $isFirst = false;
-            continue;
-        }
+        if ($skipFirst && $isFirst) { $isFirst = false; continue; }
         $isFirst = false;
-        if (substr($s, -1) !== '.' && substr($s, -1) !== '!' && substr($s, -1) !== '?') {
-            $s .= '.';
-        }
+        if ($count >= $maxItems) break;
+        if (!preg_match('/[.!?]$/', $s)) $s .= '.';
         $html .= '<li>' . htmlspecialchars($s) . '</li>';
+        $count++;
     }
     $html .= '</ul>';
-    return $html;
+    return $count > 0 ? $html : '<p style="color:var(--text-tertiary);font-style:italic;">No specific data extracted.</p>';
 }
-
-function getScore($salt, $string, $min = 60, $max = 100) {
-    if (empty($string)) $string = 'default';
-    $hash = abs(crc32($salt . '_' . substr($string, 0, 50)));
-    return $min + ($hash % ($max - $min + 1));
-}
-
-$bsText = $report['blind_spot'] ?? 'n/a';
-$tripText = $report['emotional_tripwire'] ?? 'n/a';
-$s1 = getScore($sessionId, $bsText, 70, 99);
-$s2 = getScore($sessionId, $tripText, 60, 95);
-$psychDataPHP = [getScore($sessionId,'d'.$bsText,50,95), getScore($sessionId,'a'.$tripText,40,90), getScore($sessionId,'x'.$bsText,40,95), getScore($sessionId,'l'.$tripText,60,95), getScore($sessionId,'e'.$bsText,50,95)];
-$lingDataPHP = [getScore($sessionId,'t',60,99), getScore($sessionId,'c',60,99), getScore($sessionId,'a',60,99), getScore($sessionId,'e',60,99), getScore($sessionId,'f',60,99)];
-$bsRadarDataPHP = [getScore($sessionId,'aw',40,90), getScore($sessionId,'im',70,99), getScore($sessionId,'re',60,90)];
-$triggerRadarDataPHP = [getScore($sessionId,'vo',70,99), getScore($sessionId,'fr',60,95), getScore($sessionId,'se',65,95)];
-
-$roundTranscripts = [];
-foreach ($transcript as $msg) {
-    $rn = $msg['round_number'];
-    if (!isset($roundTranscripts[$rn])) $roundTranscripts[$rn] = [];
-    $roundTranscripts[$rn][] = $msg;
-}
-
-$msgLengthsByRound = [];
-$responseTimesByRound = [];
-foreach ($transcript as $msg) {
-    if ($msg['role'] === 'user') {
-        $rn = $msg['round_number'];
-        if (!isset($msgLengthsByRound[$rn])) $msgLengthsByRound[$rn] = [];
-        $msgLengthsByRound[$rn][] = $msg['char_count'];
-        if ($msg['response_time_ms']) {
-            if (!isset($responseTimesByRound[$rn])) $responseTimesByRound[$rn] = [];
-            $responseTimesByRound[$rn][] = $msg['response_time_ms'];
-        }
-    }
-}
-$avgLengths = [];
-$avgTimes = [];
-for ($i = 1; $i <= 5; $i++) {
-    $avgLengths[$i] = isset($msgLengthsByRound[$i]) ? round(array_sum($msgLengthsByRound[$i]) / count($msgLengthsByRound[$i])) : 0;
-    $avgTimes[$i] = isset($responseTimesByRound[$i]) ? round(array_sum($responseTimesByRound[$i]) / count($responseTimesByRound[$i]) / 1000, 1) : 0;
-}
-
-// Calculate mock Stress Resistance Score (0-100) based on performance Consistency
-$scoreBase = array_sum($avgLengths) + (60 - array_sum($avgTimes)); // Mock algorithm
-$stressResistanceScore = min(98, max(42, round(($scoreBase / 500) * 100)));
-
-// Radar Chart Data (Mapping performance across 5 personalities)
-// In a real app, this would be based on LLM's 'score' for each round
-$radarData = [
-    $avgLengths[1] > 20 ? 85 : 45, // Boss
-    $avgLengths[2] > 20 ? 70 : 35, // Uncle
-    $avgLengths[3] > 20 ? 92 : 55, // Investor
-    $avgLengths[4] > 20 ? 65 : 40, // Coworker
-    $avgLengths[5] > 20 ? 78 : 50  // Guilt-Tripper
-];
 
 $pageTitle = "Audit Report";
 $extraCss = ['report.css'];
@@ -124,9 +137,9 @@ include __DIR__ . '/../includes/header.php';
         </div>
 
         <div class="audit-meta header-card">
-            <div class="text-xs uppercase tracking-widest text-tertiary mb-1">AUDIT NO: <?= strtoupper(substr(md5($sessionId), 0, 8)) ?></div>
+            <div class="text-xs uppercase tracking-widest text-tertiary mb-1">AUDIT NO: <?= strtoupper(substr(md5($sessionId . $date), 0, 8)) ?></div>
             <h1 class="text-2xl font-extrabold tracking-tighter">Performance Analysis</h1>
-            <div class="text-xs text-secondary mt-2">Communication Strategy Review • Stage Map: Baseline</div>
+            <div class="text-xs text-secondary mt-2"><?= htmlspecialchars($topicDisplay) ?> • <?= $date ?></div>
         </div>
     </header>
 
@@ -148,7 +161,7 @@ include __DIR__ . '/../includes/header.php';
         </div>
     </div>
 
-    <!-- 3. Key Findings -->
+    <!-- 3. Primary Diagnostics -->
     <div class="findings-audit-section mb-9">
         <h2 class="section-title mb-6">Primary Diagnostics</h2>
         <div class="diagnostics-grid">
@@ -157,8 +170,8 @@ include __DIR__ . '/../includes/header.php';
                 <div class="diag-content" style="flex: 1; display: flex; gap: 2rem; align-items: center; justify-content: space-between; flex-wrap: wrap;">
                     <div style="flex: 1; min-width: 250px;">
                         <span class="diag-label text-success">STRONGEST VECTOR</span>
-                        <h3 class="font-bold text-lg mb-3"><?= htmlspecialchars(explode('.', $report['strongest_under'] ?: 'N/A')[0]) ?>.</h3>
-                        <div class="diag-text" style="font-size: 0.9rem; margin-top:0;"><?= formatAsPointers($report['strongest_under'], true) ?></div>
+                        <h3 class="font-bold text-lg mb-3"><?= htmlspecialchars(extractHeading($strongestUnder)) ?>.</h3>
+                        <div class="diag-text" style="font-size: 0.9rem; margin-top:0;"><?= formatAsPointers($strongestUnder, true, 3) ?></div>
                     </div>
                     <div style="flex: 0 0 130px; height: 130px; position:relative;" class="glass-magical p-2 rounded-full">
                         <canvas id="miniGauge1"></canvas>
@@ -171,8 +184,8 @@ include __DIR__ . '/../includes/header.php';
                 <div class="diag-content" style="flex: 1; display: flex; gap: 2rem; align-items: center; justify-content: space-between; flex-wrap: wrap;">
                     <div style="flex: 1; min-width: 250px;">
                         <span class="diag-label text-danger">DEEPEST VULNERABILITY</span>
-                        <h3 class="font-bold text-lg mb-3"><?= htmlspecialchars(explode('.', $report['biggest_vulnerability'] ?: 'N/A')[0]) ?>.</h3>
-                        <div class="diag-text" style="font-size: 0.9rem; margin-top:0;"><?= formatAsPointers($report['biggest_vulnerability'], true) ?></div>
+                        <h3 class="font-bold text-lg mb-3"><?= htmlspecialchars(extractHeading($biggestVuln)) ?>.</h3>
+                        <div class="diag-text" style="font-size: 0.9rem; margin-top:0;"><?= formatAsPointers($biggestVuln, true, 3) ?></div>
                     </div>
                     <div style="flex: 0 0 130px; height: 130px; position:relative;" class="glass-magical p-2 rounded-full">
                         <canvas id="miniGauge2"></canvas>
@@ -183,20 +196,17 @@ include __DIR__ . '/../includes/header.php';
         </div>
     </div>
 
-    <!-- 4. Deep Insights -->
-    <div class="insights-audit-flow mb-9" onclick="this.classList.toggle('expanded')">
+    <!-- 4. Psychological Findings -->
+    <div class="insights-audit-flow mb-9 expanded">
         <div class="flow-header">
             <h2 class="section-title">Psychological Findings</h2>
-            <span class="text-accent uppercase tracking-tighter text-xs">Tap to Expand Detail</span>
-        </div>
-        <div class="flow-preview mt-4 text-secondary">
-            <?= substr(htmlspecialchars($report['pattern_summary'] ?: ''), 0, 150) ?>...
         </div>
         <div class="flow-full mt-4 text-secondary" style="display: flex; flex-wrap: wrap; gap: 2rem; align-items: stretch;">
             <!-- Left Data Column -->
             <div style="flex: 1; min-width: 300px;">
                 <div class="mb-4">
-                    <?= formatAsPointers($report['pattern_summary'] ?: '', false) ?>
+                    <h4 class="text-xs uppercase tracking-widest text-accent font-bold mb-3">Pattern Analysis</h4>
+                    <?= formatAsPointers($patternSummary, false, 4) ?>
                 </div>
                 
                 <div class="insight-split mt-6" style="display: flex; flex-direction: column; gap: 2rem;">
@@ -207,7 +217,7 @@ include __DIR__ . '/../includes/header.php';
                         <div style="flex: 1; min-width: 250px;">
                             <span class="marker mb-3 block uppercase tracking-widest font-bold text-accent" style="font-size: 1rem;"><span class="emoji-react mr-2" style="font-size: 1.5rem;">👁️‍🗨️</span>IDENTIFIED BLIND SPOT</span>
                             <div style="font-size: 1rem; line-height: 1.6;">
-                                <?= formatAsPointers($report['blind_spot'] ?: 'N/A', false) ?>
+                                <?= formatAsPointers($blindSpot, false, 3) ?>
                             </div>
                         </div>
                     </div>
@@ -218,7 +228,7 @@ include __DIR__ . '/../includes/header.php';
                         <div style="flex: 1; min-width: 250px;">
                             <span class="marker mb-3 block uppercase tracking-widest font-bold text-danger" style="font-size: 1rem;"><span class="emoji-react mr-2" style="font-size: 1.5rem;">🔥</span>EMOTIONAL TRIGGER</span>
                             <div style="font-size: 1rem; line-height: 1.6;">
-                                <?= formatAsPointers($report['emotional_tripwire'] ?: 'N/A', false) ?>
+                                <?= formatAsPointers($emotionalTrip, false, 3) ?>
                             </div>
                         </div>
                     </div>
@@ -247,23 +257,18 @@ include __DIR__ . '/../includes/header.php';
             
             <!-- Text/Pattern Side -->
             <div style="flex: 1; min-width: 300px; display: flex; flex-direction: column; justify-content: center;">
-                <?php 
-                $patterns = $analysis['language_patterns'] ?? [];
-                if (empty($patterns)): ?>
+                <?php if (empty($patterns)): ?>
                     <div style="text-align: center; color: var(--text-tertiary);">
-                        <div style="height: 160px; width: 100%; max-width: 450px; margin: 0 auto 2rem auto; position: relative;" class="glass-magical p-3">
-                            <canvas id="neutralSpeechChart"></canvas>
-                        </div>
-                        <h3 class="text-xl font-bold uppercase tracking-widest text-secondary mb-2">Neutral Speech Detected</h3>
-                        <p style="font-size: 0.95rem; line-height: 1.6;">No highly deviating or disruptive linguistic patterns were identified in this interaction. The user's speech profile remained within expected parameters.</p>
+                        <h3 class="text-xl font-bold uppercase tracking-widest text-secondary mb-2">No Distinct Patterns Detected</h3>
+                        <p style="font-size: 0.95rem; line-height: 1.6;">The AI analysis did not extract specific repeated phrases from this session. This may indicate varied and adaptive language use.</p>
                     </div>
                 <?php else: ?>
                     <h3 class="text-xs uppercase tracking-widest text-accent font-bold mb-4">Detected Phrases</h3>
                     <div class="patterns-stack" style="display: flex; flex-direction: column; gap: 1rem;">
-                    <?php foreach ($patterns as $p): ?>
+                    <?php foreach (array_slice($patterns, 0, 4) as $p): ?>
                         <div class="pattern-item p-4 hover-float" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; transition: 0.3s;">
-                            <div class="pattern-phrase mono text-accent mb-2" style="font-size: 1.05rem;"><span class="emoji-react mr-2">🗣️</span>"<?= htmlspecialchars($p['phrase'] ?? 'Unknown') ?>"</div>
-                            <div class="pattern-context text-sm text-secondary" style="line-height: 1.5;"><?= formatAsPointers($p['context'] ?? 'No context provided.', false) ?></div>
+                            <div class="pattern-phrase mono text-accent mb-2" style="font-size: 1.05rem;"><span class="emoji-react mr-2">🗣️</span>"<?= htmlspecialchars($p['phrase'] ?? '') ?>"<?php if (!empty($p['count'])): ?> <span class="text-tertiary text-sm">(×<?= intval($p['count']) ?>)</span><?php endif; ?></div>
+                            <div class="pattern-context text-sm text-secondary" style="line-height: 1.5;"><?= htmlspecialchars($p['context'] ?? '') ?></div>
                         </div>
                     <?php endforeach; ?>
                     </div>
@@ -276,7 +281,7 @@ include __DIR__ . '/../includes/header.php';
     <div class="directives-audit-section mb-9">
         <h2 class="section-title mb-6">Strategic Directives</h2>
         <div class="directives-stack">
-            <?php foreach ($recommendations as $idx => $rec): ?>
+            <?php foreach (array_slice($recommendations, 0, 4) as $idx => $rec): ?>
                 <div class="directive-entry fade-in glass-magical hover-float mt-4 p-5 rounded-lg" style="display: flex; align-items: center; gap: 1rem;">
                     <span class="emoji-react" style="font-size: 1.8rem; background: rgba(255,255,255,0.1); padding: 8px; border-radius: 50%;">🎯</span>
                     <span class="directive-idx" style="font-size: 1.5rem; color: rgba(255,255,255,0.2); font-weight: 800;">0<?= $idx + 1 ?></span>
@@ -298,8 +303,6 @@ include __DIR__ . '/../includes/header.php';
 
 <script>
     const labels = ['BOSS', 'UNCLE', 'INVESTOR', 'COWORKER', 'RELATIONSHIP'];
-    
-    // Patterned Data Themes
     const pColors = ['#94a3b8', '#fbbf24', '#f87171', '#38bdf8', '#c084fc'];
     
     const baseOpts = {
@@ -312,7 +315,7 @@ include __DIR__ . '/../includes/header.php';
         }
     };
 
-    // 1. Radar Chart (Teal Theme)
+    // 1. Persona Resistance Radar
     const radarValues = [<?= implode(',', $radarData) ?>];
     const radarLabels = labels.map((l, i) => l + ' ' + radarValues[i] + '%');
     new Chart(document.getElementById('radarChart'), {
@@ -330,39 +333,31 @@ include __DIR__ . '/../includes/header.php';
             }]
         },
         options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            animation: { duration: 2500, easing: 'easeOutQuart' }, // LIVE SYNC FEEL
+            responsive: true, maintainAspectRatio: false,
+            animation: { duration: 2500, easing: 'easeOutQuart' },
             plugins: { legend: { display: false } },
-            scales: { r: { angleLines: { color: 'rgba(255,255,255,0.05)' }, grid: { color: 'rgba(255,255,255,0.05)' }, pointLabels: { color: '#88a', font: { family: "'JetBrains Mono'", size: 10 } }, ticks: { display: false } } }
+            scales: { r: { angleLines: { color: 'rgba(255,255,255,0.05)' }, grid: { color: 'rgba(255,255,255,0.05)' }, pointLabels: { color: '#88a', font: { family: "'JetBrains Mono'", size: 10 } }, ticks: { display: false, max: 100, min: 0 } } }
         }
     });
 
-    // 2. Length Chart (Blue Pattern)
+    // 2. Volume Strategy
     const ctxL = document.getElementById('lengthChart').getContext('2d');
     const gradL = ctxL.createLinearGradient(0, 0, 400, 0);
     gradL.addColorStop(0, '#0ea5e9'); gradL.addColorStop(1, '#3b82f6');
-
     new Chart(ctxL, {
         type: 'line',
-        data: { labels: labels, datasets: [{ data: [<?= implode(',', array_values($avgLengths)) ?>], borderColor: gradL, borderWidth: 4, tension: 0.4, pointRadius: 4, pointBackgroundColor: '#fff' }] },
-        options: {
-            ...baseOpts,
-            animation: { duration: 2000, easing: 'easeOutQuart' } // LIVE SYNC FEEL
-        }
+        data: { labels: labels, datasets: [{ data: [<?= implode(',', $radarData) ?>], borderColor: gradL, borderWidth: 4, tension: 0.4, pointRadius: 4, pointBackgroundColor: '#fff' }] },
+        options: { ...baseOpts, animation: { duration: 2000, easing: 'easeOutQuart' } }
     });
 
-    // 3. Time Chart (Amethyst Pattern)
+    // 3. Reaction Consistency
     new Chart(document.getElementById('timeChart'), {
         type: 'bar',
-        data: { labels: labels, datasets: [{ data: [<?= implode(',', array_values($avgTimes)) ?>], backgroundColor: pColors, borderRadius: 6 }] },
-        options: {
-            ...baseOpts,
-            animation: { duration: 2200, easing: 'easeOutQuart' } // LIVE SYNC FEEL
-        }
+        data: { labels: labels, datasets: [{ data: [<?= implode(',', $reactDataPHP) ?>], backgroundColor: pColors, borderRadius: 6 }] },
+        options: { ...baseOpts, scales: { ...baseOpts.scales, y: { display: false, max: 100, min: 0 } }, animation: { duration: 2200, easing: 'easeOutQuart' } }
     });
 
-    // 4. Psychological State Polar Chart
+    // 4. Cognitive State Polar
     const psychData = [<?= implode(',', $psychDataPHP) ?>];
     const psychLabels = ['Defensiveness', 'Adaptability', 'Anxiety', 'Logic Focus', 'Empathy'].map((l, i) => l + ' ' + psychData[i] + '%');
     new Chart(document.getElementById('psychChart'), {
@@ -371,46 +366,24 @@ include __DIR__ . '/../includes/header.php';
             labels: psychLabels,
             datasets: [{
                 data: psychData,
-                backgroundColor: [
-                    'rgba(248, 113, 113, 0.7)',
-                    'rgba(56, 189, 248, 0.7)',
-                    'rgba(251, 191, 36, 0.7)',
-                    'rgba(192, 132, 252, 0.7)',
-                    'rgba(20, 184, 166, 0.7)'
-                ],
-                borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.1)',
-                hoverOffset: 10
+                backgroundColor: ['rgba(248,113,113,0.7)', 'rgba(56,189,248,0.7)', 'rgba(251,191,36,0.7)', 'rgba(192,132,252,0.7)', 'rgba(20,184,166,0.7)'],
+                borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)'
             }]
         },
         options: {
-            responsive: true,
-            maintainAspectRatio: false,
+            responsive: true, maintainAspectRatio: false,
             animation: { duration: 3000, easing: 'easeOutQuart' },
-            scales: { r: { ticks: { display: false }, grid: { color: 'rgba(255,255,255,0.05)' }, angleLines: { color: 'rgba(255,255,255,0.1)' } } },
-            plugins: { 
-                legend: { 
-                    display: true, 
-                    position: 'bottom',
-                    labels: {
-                        color: 'rgba(255,255,255,0.85)',
-                        font: { size: 11, family: "'JetBrains Mono'" },
-                        padding: 15,
-                        usePointStyle: true,
-                        pointStyle: 'circle'
-                    }
-                } 
-            }
+            scales: { r: { ticks: { display: false, max: 100 }, grid: { color: 'rgba(255,255,255,0.05)' }, angleLines: { color: 'rgba(255,255,255,0.1)' } } },
+            plugins: { legend: { display: true, position: 'bottom', labels: { color: 'rgba(255,255,255,0.85)', font: { size: 11, family: "'JetBrains Mono'" }, padding: 15, usePointStyle: true, pointStyle: 'circle' } } }
         }
     });
 
-    // 5. Advanced Doughnut Gauges for Diagnostics
+    // 5. Diagnostic Gauges
     const gOpts = { responsive: true, maintainAspectRatio: false, cutout: '78%', plugins: { tooltip: { enabled: false } }, animation: { duration: 2500, easing: 'easeOutQuart' } };
-    
     const s1 = <?= $s1 ?>;
     new Chart(document.getElementById('miniGauge1'), {
         type: 'doughnut',
-        data: { datasets: [{ data: [s1, 100-s1], backgroundColor: ['rgba(20, 184, 166, 1)', 'rgba(255,255,255,0.05)'], borderWidth: 0 }] },
+        data: { datasets: [{ data: [s1, 100-s1], backgroundColor: ['rgba(20,184,166,1)', 'rgba(255,255,255,0.05)'], borderWidth: 0 }] },
         options: gOpts
     });
     document.getElementById('mg1val').textContent = s1 + '%';
@@ -418,29 +391,30 @@ include __DIR__ . '/../includes/header.php';
     const s2 = <?= $s2 ?>;
     new Chart(document.getElementById('miniGauge2'), {
         type: 'doughnut',
-        data: { datasets: [{ data: [s2, 100-s2], backgroundColor: ['rgba(248, 113, 113, 1)', 'rgba(255,255,255,0.05)'], borderWidth: 0 }] },
+        data: { datasets: [{ data: [s2, 100-s2], backgroundColor: ['rgba(248,113,113,1)', 'rgba(255,255,255,0.05)'], borderWidth: 0 }] },
         options: gOpts
     });
     document.getElementById('mg2val').textContent = s2 + '%';
 
-    // 6. Insight Mini-Radar Charts
+    // 6. Blind Spot Radar
     const bsData = [<?= implode(',', $bsRadarDataPHP) ?>];
     const bsLabels = ['AWARENESS','IMPACT','RECURRENCE'].map((l, i) => l + ' ' + bsData[i] + '%');
     new Chart(document.getElementById('blindSpotChart'), {
         type: 'radar',
-        data: { labels: bsLabels, datasets: [{ data: bsData, backgroundColor: 'rgba(56, 189, 248, 0.5)', borderColor: '#38bdf8', borderWidth: 3, pointBackgroundColor: '#fff', pointBorderColor: '#38bdf8', pointRadius: 6 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { r: { ticks:{display:false, max: 100, min: 0}, pointLabels:{display:true, color: '#38bdf8', font: {size: 13, family: "'JetBrains Mono'", weight: '900'}}, grid: { color: 'rgba(56, 189, 248, 0.5)', circular: true, lineWidth: 2 }, angleLines: { color: 'rgba(56, 189, 248, 0.5)', lineWidth: 2 } } }, animation: { duration: 3000 } }
+        data: { labels: bsLabels, datasets: [{ data: bsData, backgroundColor: 'rgba(56,189,248,0.5)', borderColor: '#38bdf8', borderWidth: 3, pointBackgroundColor: '#fff', pointBorderColor: '#38bdf8', pointRadius: 6 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { r: { ticks:{display:false, max:100, min:0}, pointLabels:{display:true, color:'#38bdf8', font:{size:13, family:"'JetBrains Mono'", weight:'900'}}, grid:{color:'rgba(56,189,248,0.5)', circular:true, lineWidth:2}, angleLines:{color:'rgba(56,189,248,0.5)', lineWidth:2} } }, animation: { duration: 3000 } }
     });
 
+    // 7. Trigger Radar
     const triggerData = [<?= implode(',', $triggerRadarDataPHP) ?>];
     const triggerLabels = ['VOLATILITY','FREQUENCY','SEVERITY'].map((l, i) => l + ' ' + triggerData[i] + '%');
     new Chart(document.getElementById('triggerChart'), {
         type: 'radar',
-        data: { labels: triggerLabels, datasets: [{ data: triggerData, backgroundColor: 'rgba(248, 113, 113, 0.5)', borderColor: '#f87171', borderWidth: 3, pointBackgroundColor: '#fff', pointBorderColor: '#f87171', pointRadius: 6 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { r: { ticks:{display:false, max: 100, min: 0}, pointLabels:{display:true, color: '#f87171', font: {size: 13, family: "'JetBrains Mono'", weight: '900'}}, grid: { color: 'rgba(248, 113, 113, 0.5)', circular: true, lineWidth: 2 }, angleLines: { color: 'rgba(248, 113, 113, 0.5)', lineWidth: 2 } } }, animation: { duration: 3000 } }
+        data: { labels: triggerLabels, datasets: [{ data: triggerData, backgroundColor: 'rgba(248,113,113,0.5)', borderColor: '#f87171', borderWidth: 3, pointBackgroundColor: '#fff', pointBorderColor: '#f87171', pointRadius: 6 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { r: { ticks:{display:false, max:100, min:0}, pointLabels:{display:true, color:'#f87171', font:{size:13, family:"'JetBrains Mono'", weight:'900'}}, grid:{color:'rgba(248,113,113,0.5)', circular:true, lineWidth:2}, angleLines:{color:'rgba(248,113,113,0.5)', lineWidth:2} } }, animation: { duration: 3000 } }
     });
 
-    // 7. Linguistic Profile Chart
+    // 8. Linguistic Profile
     const lingData = [<?= implode(',', $lingDataPHP) ?>];
     const lingLabels = ['TONE','COMPLEXITY','ASSERTIVENESS','EMPATHY','FORMALITY'].map((l, i) => l + ' ' + lingData[i] + '%');
     new Chart(document.getElementById('lingChart'), {
@@ -449,57 +423,18 @@ include __DIR__ . '/../includes/header.php';
             labels: lingLabels,
             datasets: [{
                 data: lingData,
-                backgroundColor: [
-                    'rgba(244, 114, 182, 0.8)', // pink
-                    'rgba(167, 139, 250, 0.8)', // purple 
-                    'rgba(52, 211, 153, 0.8)',  // emerald
-                    'rgba(251, 191, 36, 0.8)',  // amber
-                    'rgba(56, 189, 248, 0.8)'   // cyan
-                ],
-                borderWidth: 2,
-                borderColor: '#111',
-                hoverOffset: 12
+                backgroundColor: ['rgba(244,114,182,0.8)', 'rgba(167,139,250,0.8)', 'rgba(52,211,153,0.8)', 'rgba(251,191,36,0.8)', 'rgba(56,189,248,0.8)'],
+                borderWidth: 2, borderColor: '#111'
             }]
         },
         options: {
             layout: { padding: 10 },
-            responsive: true,
-            maintainAspectRatio: false,
+            responsive: true, maintainAspectRatio: false,
             animation: { duration: 3000, easing: 'easeOutQuart' },
-            scales: { r: { ticks: { display: false }, grid: { color: 'rgba(255,255,255,0.05)' }, angleLines: { color: 'rgba(255,255,255,0.05)' }, pointLabels: { display: true, centerPointLabels: true, color: 'rgba(255,255,255,0.8)', font: { size: 12, family: "'JetBrains Mono'", weight: 'bold' } } } },
+            scales: { r: { ticks: { display: false, max: 100 }, grid: { color: 'rgba(255,255,255,0.05)' }, angleLines: { color: 'rgba(255,255,255,0.05)' }, pointLabels: { display: true, centerPointLabels: true, color: 'rgba(255,255,255,0.8)', font: { size: 12, family: "'JetBrains Mono'", weight: 'bold' } } } },
             plugins: { legend: { display: false } }
         }
     });
-
-    // 8. Neutral Baseline Wave Graph
-    const neutralCtx = document.getElementById('neutralSpeechChart');
-    if (neutralCtx) {
-        new Chart(neutralCtx, {
-            type: 'line',
-            data: {
-                labels: ['1','2','3','4','5','6','7','8','9','10','11','12'],
-                datasets: [{
-                    data: [10, 11, 10, 9, 10, 11, 10, 10, 9, 10, 11, 10], // Flatline calm wave
-                    borderColor: '#38bdf8', // Cyan calm color
-                    borderWidth: 3,
-                    tension: 0.5, // Smooth curve
-                    pointRadius: 0,
-                    backgroundColor: 'rgba(56, 189, 248, 0.15)',
-                    fill: true
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                animation: { duration: 4000, easing: 'easeInOutSine' },
-                scales: { 
-                    x: { display: false }, 
-                    y: { display: false, min: 0, max: 20 } 
-                },
-                plugins: { legend: { display: false }, tooltip: { enabled: false } }
-            }
-        });
-    }
 </script>
 
 <?php include __DIR__ . '/../includes/footer.php'; ?>

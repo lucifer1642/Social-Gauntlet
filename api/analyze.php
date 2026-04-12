@@ -72,39 +72,37 @@ $metrics = calculateBehavioralMetrics($transcript);
 $formattedTranscript .= "\n--- BEHAVIORAL DATA ---\n";
 $formattedTranscript .= json_encode($metrics, JSON_PRETTY_PRINT);
 
-// Analysis prompt
-$analysisPrompt = "You are a communication psychologist performing a high-fidelity behavioral audit. You have been provided with a transcript of 5 high-pressure rounds where the subject (USER) interacted with distinct difficult personalities.
+// Analysis prompt — concise to avoid token truncation while requesting all chart data
+$analysisPrompt = "You are a communication psychologist. Analyze the transcript and respond with ONLY valid JSON (no markdown, no explanation). Keep all text fields under 100 words each. Be specific but concise. Reference actual quotes. Every audit must be unique — no two analyses should read the same.
 
-Your goal is to provide a uniquely tailored analysis. DO NOT give generic advice. You MUST:
-1. Reference specific quotes from the subject in each round.
-2. Analyze how their language evolved between Round 1 (Boss) and Round 5 (Guilt-Tripper).
-3. Identify a 'Linguistic Fingerprint' — unique phrases or verbal tics they used only when stressed.
-4. Calculate and mention specific percentage shifts in response volume or velocity.
-5. Provide actionable strategic directives that are specific to the topic discussed ({$topicDisplay}).
+Topic: {$topicDisplay}
 
-You MUST respond in EXACTLY this JSON format and nothing else:
 {
-    \"strongest_under\": \"One detailed paragraph describing the exact persona or type of pressure the user handled best. Quote a specific exchange where they showed strength.\",
-    \"biggest_vulnerability\": \"One detailed paragraph identifying their primary failure point. Use metrics (e.g., 'Response length increased by 40% when challenged') and quote their weakest moment.\",
-    \"blind_spot\": \"One paragraph about a subtext or emotional cue they completely missed in the AI's dialogue. Be specific about which round and which quote they misread.\",
-    \"pattern_summary\": \"Analyze recurring linguistic patterns. List 3 specific phrases they used repeatedly and explain the psychological underlying cause for each.\",
-    \"emotional_tripwire\": \"Identify the exact moment/sentence from an AI persona that caused the subject to lose composure or clarity. Explain why that specific trigger worked.\",
-    \"recommendations\": [
-        \"A strategic directive specific to the topic ({$topicDisplay})\",
-        \"A linguistic adjustment based on their detected patterns\",
-        \"A psychological technique to counter their biggest detected vulnerability\"
-    ],
+    \"strongest_under\": \"Which persona they handled best — cite 1 specific quote (1 short paragraph)\",
+    \"biggest_vulnerability\": \"Their primary weakness — cite their weakest moment (1 short paragraph)\",
+    \"blind_spot\": \"What emotional cue or subtext they missed — specify round and AI quote\",
+    \"pattern_summary\": \"3 recurring linguistic patterns with exact phrases quoted\",
+    \"emotional_tripwire\": \"The exact AI sentence that triggered them and their response\",
+    \"recommendations\": [\"directive 1\",\"directive 2\",\"directive 3\",\"directive 4\"],
     \"round_analyses\": [
-        {\"round\": 1, \"personality\": \"Micromanager\", \"performance\": \"Analysis with a quote\", \"key_moment\": \"Revealing quote\"},
-        {\"round\": 2, \"personality\": \"Conspiracy Uncle\", \"performance\": \"Analysis with a quote\", \"key_moment\": \"Revealing quote\"},
-        {\"round\": 3, \"personality\": \"Investor\", \"performance\": \"Analysis with a quote\", \"key_moment\": \"Revealing quote\"},
-        {\"round\": 4, \"personality\": \"Passive-Aggressive\", \"performance\": \"Analysis with a quote\", \"key_moment\": \"Revealing quote\"},
-        {\"round\": 5, \"personality\": \"Guilt-Tripper\", \"performance\": \"Analysis with a quote\", \"key_moment\": \"Revealing quote\"}
+        {\"round\":1,\"personality\":\"Boss\",\"performance\":\"brief analysis\",\"key_moment\":\"quote\"},
+        {\"round\":2,\"personality\":\"Uncle\",\"performance\":\"brief analysis\",\"key_moment\":\"quote\"},
+        {\"round\":3,\"personality\":\"Investor\",\"performance\":\"brief analysis\",\"key_moment\":\"quote\"},
+        {\"round\":4,\"personality\":\"Coworker\",\"performance\":\"brief analysis\",\"key_moment\":\"quote\"},
+        {\"round\":5,\"personality\":\"Guilt-Tripper\",\"performance\":\"brief analysis\",\"key_moment\":\"quote\"}
     ],
-    \"language_patterns\": [
-        {\"phrase\": \"exact phrase used\", \"count\": 0, \"context\": \"what this specific repetition reveals about their state\"}
-    ]
-}";
+    \"language_patterns\": [{\"phrase\":\"exact phrase used\",\"count\":0,\"context\":\"what it reveals\"}],
+    \"chart_data\": {
+        \"persona_resistance\":{\"boss\":0,\"uncle\":0,\"investor\":0,\"coworker\":0,\"guilt_tripper\":0},
+        \"stress_resistance_index\":0,
+        \"psych_profile\":{\"defensiveness\":0,\"adaptability\":0,\"anxiety\":0,\"logic_focus\":0,\"empathy\":0},
+        \"linguistic_profile\":{\"tone_control\":0,\"complexity\":0,\"assertiveness\":0,\"empathy\":0,\"formality\":0},
+        \"reaction_consistency\":{\"boss\":0,\"uncle\":0,\"investor\":0,\"coworker\":0,\"guilt_tripper\":0},
+        \"blind_spot_radar\":{\"awareness\":0,\"impact\":0,\"recurrence\":0},
+        \"trigger_radar\":{\"volatility\":0,\"frequency\":0,\"severity\":0}
+    }
+}
+All scores 0-100 based on actual conversation performance. Fill ALL numeric fields.";
 
 // Send to Gemini Pro for analysis
 $aiResponse = sendAnalysisToGemini($analysisPrompt, $formattedTranscript);
@@ -114,10 +112,18 @@ if ($aiResponse === false) {
     exit;
 }
 
-// Parse the JSON response (strip markdown code fences if present)
+// Parse the JSON response — robust extraction
 $cleanResponse = $aiResponse;
-$cleanResponse = preg_replace('/^```json\s*/i', '', $cleanResponse);
-$cleanResponse = preg_replace('/\s*```$/', '', $cleanResponse);
+// Strip markdown code fences
+$cleanResponse = preg_replace('/```(?:json)?\s*/i', '', $cleanResponse);
+
+// Find the outermost JSON object: first '{' to last '}'
+$firstBrace = strpos($cleanResponse, '{');
+$lastBrace = strrpos($cleanResponse, '}');
+if ($firstBrace !== false && $lastBrace !== false && $lastBrace > $firstBrace) {
+    $cleanResponse = substr($cleanResponse, $firstBrace, $lastBrace - $firstBrace + 1);
+}
+
 $analysis = json_decode($cleanResponse, true);
 
 if (!$analysis) {

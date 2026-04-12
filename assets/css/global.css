@@ -84,6 +84,7 @@ h1, h2, h3, h4 {
     letter-spacing: -0.02em;
     line-height: 1.15;
     color: var(--text-primary);
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 h1 { font-size: 2.75rem; }
 h2 { font-size: 1.75rem; }
@@ -180,6 +181,52 @@ strong { font-weight: 600; }
 
 .btn-sm { padding: 10px 20px; font-size: 13px; }
 .btn-lg { padding: 18px 40px; font-size: 16px; }
+
+.btn-neon {
+    position: relative;
+    background: transparent;
+    color: #0ea5e9 !important;
+    text-transform: uppercase;
+    letter-spacing: 2.5px;
+    font-size: 1.1rem !important;
+    font-weight: 800;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    border: 2px solid #0ea5e9 !important;
+    box-shadow: 0 0 15px rgba(14, 165, 233, 0.3), inset 0 0 15px rgba(14, 165, 233, 0.2);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    z-index: 1;
+    padding: 12px 30px !important;
+}
+
+.btn-neon::before {
+    content: '';
+    position: absolute;
+    top: 0; left: -100%;
+    width: 60%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+    transform: skewX(-25deg);
+    transition: 0.6s;
+    z-index: -1;
+}
+
+.btn-neon:hover::before {
+    animation: shineSweepHovers 0.8s forwards;
+}
+
+@keyframes shineSweepHovers {
+    0% { left: -100%; }
+    100% { left: 200%; }
+}
+
+.btn-neon:hover {
+    background: rgba(14, 165, 233, 0.15);
+    color: #fff !important;
+    box-shadow: 0 0 30px rgba(14, 165, 233, 0.8), inset 0 0 25px rgba(14, 165, 233, 0.5);
+    border-color: #ffffff !important;
+    transform: scale(1.08) translateY(-3px);
+    text-shadow: 0 0 12px rgba(255, 255, 255, 1);
+}
 
 /* ---- FORM INPUTS ---- */
 .form-input {
