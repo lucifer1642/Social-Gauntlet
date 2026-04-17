@@ -22,7 +22,6 @@ function createSession($userId, $topic, $customTopic = null) {
     for ($i = 1; $i <= TOTAL_ROUNDS; $i++) {
         $stmt->execute([$sessionId, $i, $i]);
     }
-    
     return $sessionId;
 }
 
