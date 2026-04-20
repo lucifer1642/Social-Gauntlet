@@ -24,14 +24,17 @@ define('DB_USER', $_ENV['DB_USER'] ?? 'root');
 define('DB_PASS', $_ENV['DB_PASS'] ?? '');
 
 // AI API — Chat (NVIDIA NIM / Qwen 3)
-define('NVIDIA_API_KEY', '***REDACTED***');
+define('NVIDIA_API_KEY', $_ENV['NVIDIA_API_KEY'] ?? '');
 define('NVIDIA_MODEL_CHAT', 'qwen/qwen3-next-80b-a3b-instruct');
 define('NVIDIA_API_URL', 'https://integrate.api.nvidia.com/v1/chat/completions');
 
 // AI API — Reports & Audit (Google Gemini)
-define('GEMINI_API_KEY', $_ENV['GEMINI_API_KEY'] ?? '***REDACTED***');
+define('GEMINI_API_KEY', $_ENV['GEMINI_API_KEY'] ?? '');
 define('GEMINI_MODEL_ANALYSIS', 'gemini-2.0-flash');
 define('GEMINI_API_URL', 'https://generativelanguage.googleapis.com/v1beta/models/');
+
+// AI API — Voice / Gemini Live (separate key with Google Assistant enabled)
+define('GEMINI_VOICE_API_KEY', $_ENV['GEMINI_VOICE_API_KEY'] ?? '');
 
 // App constants
 define('APP_NAME', 'The Social Gauntlet');
@@ -57,7 +60,7 @@ if ($baseDir === '' && $scriptPath !== '') {
 define('BASE_URL', $baseDir);
 define('MAX_EXCHANGES_PER_ROUND', 6);
 define('MIN_EXCHANGES_PER_ROUND', 4);
-define('TOTAL_ROUNDS', 5);
+define('TOTAL_ROUNDS', 4);
 
 // Error reporting (turn off in production)
 error_reporting(E_ALL);

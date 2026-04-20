@@ -11,47 +11,77 @@ $sessionId = intval($_GET['session_id'] ?? 0);
 if (!$sessionId) { header('Location: ' . BASE_URL . '/app/select-topic.php'); exit; }
 $session = getSession($sessionId, $user['id']);
 if (!$session) { header('Location: ' . BASE_URL . '/app/dashboard.php'); exit; }
-if ($session['status'] === 'completed') { header('Location: ' . BASE_URL . '/app/report.php?session_id=' . $sessionId); exit; }
+if ($session['status'] === 'completed') {
+    if ($session['mode'] === 'hr') {
+        header('Location: ' . BASE_URL . '/app/hr-report-rich.php?session_id=' . $sessionId);
+    } else {
+        header('Location: ' . BASE_URL . '/app/report.php?session_id=' . $sessionId);
+    }
+    exit;
+}
+
+// Get actual rounds for this session
+$stmt = getDB()->prepare('SELECT COUNT(*) as total FROM rounds WHERE session_id = ?');
+$stmt->execute([$sessionId]);
+$totalRounds = $stmt->fetch()['total'];
 
 $currentRound = $session['current_round'];
-$personality = getPersonalityForRound($currentRound);
+$currentRoundRow = getCurrentRound($sessionId);
+if (!$currentRoundRow) { header('Location: ' . BASE_URL . '/app/dashboard.php'); exit; }
+$personality = getPersonalityForRound($currentRoundRow['personality_id']);
 $topicDisplay = getTopicTitle($session['topic'], $session['custom_topic']);
+
+// For HR mode: fetch all assigned questions for the voice engine's system prompt
+$hrQuestionsList = [];
+if ($session['mode'] === 'hr') {
+    $db = getDB();
+    $stmt = $db->prepare('SELECT hq.question, hq.guideline FROM rounds r JOIN hr_questions hq ON r.hr_question_id = hq.id WHERE r.session_id = ? ORDER BY r.round_number ASC');
+    $stmt->execute([$sessionId]);
+    $hrQuestionsList = $stmt->fetchAll();
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Round <?= $currentRound ?> — <?= APP_NAME ?></title>
+    <title><?= $session['mode'] === 'hr' ? 'HR Behavioral Audit' : "Round $currentRound" ?> — <?= APP_NAME ?></title>
     <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/global.css">
     <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/chat.css">
     <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/skins.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <?php if ($session['mode'] === 'hr'): ?>
+    <script src="<?= BASE_URL ?>/assets/js/hr-live-engine.js"></script>
+    <?php endif; ?>
 </head>
 <body>
 
 <!-- ====== TRANSITION SCREEN ====== -->
 <div class="transition-screen" id="transitionScreen">
     <div class="transition-sequence" id="transSeq">
-        <div class="trans-step" id="transStep1">Round <?= $currentRound ?> of <?= TOTAL_ROUNDS ?></div>
-        <div class="trans-step" id="transStep2">Entering next room...</div>
-        <div class="trans-step trans-persona" id="transStep3"><?= htmlspecialchars($personality['name']) ?></div>
+        <?php if ($session['mode'] === 'hr'): ?>
+            <div class="trans-step visible" style="font-size: 2rem; font-weight: 300; letter-spacing: 0.5rem;">INITIATING NEURAL LINK</div>
+        <?php else: ?>
+            <div class="trans-step" id="transStep1">Round <?= $currentRound ?> of <?= $totalRounds ?></div>
+            <div class="trans-step" id="transStep2">Entering next room...</div>
+            <div class="trans-step trans-persona" id="transStep3"><?= htmlspecialchars($personality['name']) ?></div>
+        <?php endif; ?>
     </div>
 </div>
 
 <!-- ====== MAIN CHAT WRAPPER ====== -->
-<div class="chat-wrapper" id="chatWrapper" style="opacity: 0;">
+<div class="chat-wrapper <?= $session['mode'] === 'hr' ? 'skin-hr-live hr-continuous-mode' : '' ?>" id="chatWrapper" style="opacity: 0;">
     <div class="chat-container">
 
         <!-- Top Bar -->
         <div class="topbar">
             <div class="topbar-left">
-                <div class="round-dots">
-                    <?php for ($i = 1; $i <= TOTAL_ROUNDS; $i++): ?>
+                <div class="round-dots <?= $session['mode'] === 'hr' ? 'hr-hide' : '' ?>">
+                    <?php for ($i = 1; $i <= $totalRounds; $i++): ?>
                         <div class="round-dot <?= $i < $currentRound ? 'done' : ($i == $currentRound ? 'active' : '') ?>" id="dot-<?= $i ?>"></div>
                     <?php endfor; ?>
                 </div>
-                <span class="round-label" id="roundLabel">Round <?= $currentRound ?> of <?= TOTAL_ROUNDS ?></span>
+                <span class="round-label" id="roundLabel"><?= $session['mode'] === 'hr' ? '<span class="pulse text-accent">●</span> LIVE BEHAVIORAL AUDIT' : "Round $currentRound of $totalRounds" ?></span>
             </div>
             <div class="topbar-right">
                 <span class="pressure-label" id="pressureLabel">PRESSURE</span>
@@ -69,8 +99,8 @@ $topicDisplay = getTopicTitle($session['topic'], $session['custom_topic']);
             <button class="btn btn-ghost end-round-btn" id="endRoundBtn" onclick="endRound()">End Round & Continue →</button>
         </div>
 
-        <!-- Input Area -->
-        <div class="chat-input-area">
+        <!-- Input Area (hidden in HR voice mode) -->
+        <div class="chat-input-area" id="inputArea" style="<?= $session['mode'] === 'hr' ? 'display:none;' : '' ?>">
             <div class="input-wrap">
                 <textarea class="chat-input" id="userInput" placeholder="Respond carefully..." rows="1"></textarea>
                 <button class="send-btn" id="sendBtn" onclick="sendMessage()" disabled>
@@ -78,6 +108,32 @@ $topicDisplay = getTopicTitle($session['topic'], $session['custom_topic']);
                 </button>
             </div>
         </div>
+
+        <!-- ====== GOOGLE LIVE HR VOICE UI ====== -->
+        <?php if ($session['mode'] === 'hr'): ?>
+        <div class="hr-voice-area" id="voiceArea">
+            <div class="google-live-visualizer">
+                <div class="visualizer-ring"></div>
+                <div class="visualizer-ring"></div>
+                <div class="visualizer-ring"></div>
+                <div class="visualizer-pulse"></div>
+                <div class="visualizer-core"></div>
+            </div>
+            
+            <div id="voiceStatus" class="mt-8 text-accent font-mono text-xs uppercase tracking-widest opacity-50">Syncing Behavioral Data...</div>
+
+            <div id="liveTelemetry" class="mt-9 grid grid-cols-2 gap-4 w-full px-8" style="display:none;">
+                <div class="glass p-4 bg-black/20 border-white/5">
+                    <div class="text-tertiary text-[10px] uppercase mb-1 tracking-tighter">Question</div>
+                    <div class="text-white font-mono text-sm" id="valLatency">-- / <?= count($hrQuestionsList) ?></div>
+                </div>
+                <div class="glass p-4 bg-black/20 border-white/5">
+                    <div class="text-tertiary text-[10px] uppercase mb-1 tracking-tighter">Vocal Stability</div>
+                    <div class="text-white font-mono text-sm" id="valPauses">Calculating...</div>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
 
         <!-- ====== LIVE HUD OVERLAY ====== -->
         <div class="live-hud" id="liveHud">
@@ -109,7 +165,7 @@ $topicDisplay = getTopicTitle($session['topic'], $session['custom_topic']);
     </div>
 </div>
 
-<!-- ====== ROUND TRANSITION OVERLAY (between rounds) ====== -->
+<!-- ====== ROUND TRANSITION OVERLAY (between rounds — text mode only) ====== -->
 <div class="transition-screen" id="roundTransition" style="display:none;">
     <div class="transition-sequence">
         <div class="trans-step" id="rtStep1"></div>
@@ -120,8 +176,10 @@ $topicDisplay = getTopicTitle($session['topic'], $session['custom_topic']);
 
 <script>
 const SESSION_ID = <?= $sessionId ?>;
+const SESSION_MODE = '<?= $session['mode'] ?>';
+const CANDIDATE_NAME = '<?= addslashes($session['candidate_name'] ?? '') ?>';
 const BASE = '<?= BASE_URL ?>';
-const TOTAL = <?= TOTAL_ROUNDS ?>;
+const TOTAL = <?= $totalRounds ?>;
 const API_CHAT = BASE + '/api/chat.php';
 const API_END = BASE + '/api/end-round.php';
 const API_ANALYZE = BASE + '/api/analyze.php';
@@ -129,11 +187,12 @@ const API_ANALYZE = BASE + '/api/analyze.php';
 let round = <?= $currentRound ?>;
 let exchanges = 0;
 let waiting = false;
-let basePadding = 24; // for UI tightening
+let basePadding = 24;
 
-const NAMES = {1:'The Micromanager Boss',2:'The Conspiracy Theorist Uncle',3:'The Aggressive Investor',4:'The Passive-Aggressive Coworker',5:'The Emotional Guilt-Tripper'};
-const SKINS = {1:'skin-micromanager',2:'skin-conspiracy',3:'skin-investor',4:'skin-passive-aggressive',5:'skin-guilt-tripper'};
+const NAMES = {1:'The Micromanager Boss',2:'The Conspiracy Theorist Uncle',3:'The Aggressive Investor',4:'The Passive-Aggressive Coworker', 6:'The Stern HR Recruiter'};
+const SKINS = {1:'skin-micromanager',2:'skin-conspiracy',3:'skin-investor',4:'skin-passive-aggressive', 6:'skin-hr-recruiter'};
 let hudChart = null;
+let hrEngine = null;
 
 // ---- INITIAL HUD INITIALIZATION ----
 function initHUD() {
@@ -162,18 +221,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const s2 = document.getElementById('transStep2');
     const s3 = document.getElementById('transStep3');
 
-    // Step 1: show round number
-    s1.classList.add('visible');
+    if (s1) s1.classList.add('visible');
     
-    // Staggered cinematic sequence
     setTimeout(() => {
-        s1.classList.remove('visible');
-        setTimeout(() => s2.classList.add('visible'), 300); // "Entering next room..."
+        if (s1) s1.classList.remove('visible');
+        if (s2) setTimeout(() => s2.classList.add('visible'), 300);
     }, 1800);
 
     setTimeout(() => {
-        s2.classList.remove('visible');
-        setTimeout(() => s3.classList.add('visible'), 400); // Persona name
+        if (s2) s2.classList.remove('visible');
+        if (s3) setTimeout(() => s3.classList.add('visible'), 400);
     }, 3200);
 
     setTimeout(() => {
@@ -184,24 +241,142 @@ document.addEventListener('DOMContentLoaded', () => {
             wrapper.style.display = 'flex';
             setTimeout(() => {
                 wrapper.style.opacity = '1';
-                applySkin(round);
-                loadRound();
+                applySkin(<?= $currentRoundRow['personality_id'] ?>);
+                
+                if (SESSION_MODE === 'hr') {
+                    // HR Voice mode — no loadRound, just init voice engine
+                    setTimeout(() => initHRVoice(), 1000);
+                } else {
+                    loadRound();
+                }
             }, 100);
         }, 1200);
     }, 6500);
 
-    // Auto-resize textarea
+    // Auto-resize textarea (text mode only)
     const input = document.getElementById('userInput');
-    input.addEventListener('input', () => {
-        input.style.height = 'auto';
-        input.style.height = Math.min(input.scrollHeight, 120) + 'px';
-        updateSendBtn();
-    });
-    input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-    });
+    if (input) {
+        input.addEventListener('input', () => {
+            input.style.height = 'auto';
+            input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+            updateSendBtn();
+        });
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+        });
+    }
 });
 
+// ==== HR LIVE VOICE INITIALIZATION (no rounds, predefined questions in system prompt) ====
+function initHRVoice() {
+    const apiKey = '<?= GEMINI_VOICE_API_KEY ?>';
+    
+    // Override the system instruction to include predefined questions
+    hrEngine = new HRLiveEngine(apiKey, SESSION_ID, CANDIDATE_NAME);
+    
+    // Inject predefined questions into the engine's system instruction
+    hrEngine._buildSystemInstruction = function() {
+        const now = new Date();
+        const hour = now.getHours();
+        let greeting;
+        if (hour < 12) greeting = 'Good Morning';
+        else if (hour < 17) greeting = 'Good Afternoon';
+        else greeting = 'Good Evening';
+
+        const questions = <?= json_encode(array_map(function($q) {
+            return $q['question'];
+        }, $hrQuestionsList)) ?>;
+
+        let questionBlock = '';
+        questions.forEach((q, i) => {
+            questionBlock += `\nQuestion ${i + 1}: ${q}`;
+        });
+
+        return `You are a highly professional and stern HR Recruiter conducting a formal behavioral interview.
+
+IMPORTANT — YOU MUST START THE CONVERSATION. When the session begins, you do the following IN ORDER:
+1. Greet the candidate by name using "${greeting}, ${this.candidateName}."
+2. Introduce yourself briefly as the interviewer for today's session.
+3. Explain the interview rules clearly:
+   - This is a structured behavioral interview with ${questions.length} questions.
+   - Answer each question thoroughly and honestly.
+   - Responses are evaluated on clarity, depth, professionalism, and logical consistency.
+   - Take a moment to think before answering if needed.
+   - There are no right or wrong answers, but vague or evasive responses will be challenged.
+4. Then ask the FIRST question immediately.
+
+YOUR PREDEFINED QUESTIONS (ask them in this exact order):
+${questionBlock}
+
+INTERVIEW CONDUCT RULES:
+- Ask ONE question at a time from the list above, then wait for the candidate to answer.
+- After they answer, you may ask a brief follow-up, then move to the next question in the list.
+- Do NOT skip questions. Do NOT make up new questions. Only use the ${questions.length} questions listed above.
+- After all ${questions.length} questions, formally conclude the interview.
+- Address the candidate by name (${this.candidateName}) periodically.
+- Be professional, composed, and slightly cold. No warm encouragement or filler praise.
+- If vague answers are given, challenge them: "Could you be more specific?" or "Give a concrete example."
+- When concluding, thank the candidate formally and state that the audit is complete.
+
+YOUR VOICE: Speak clearly and at a measured pace. You are a senior HR professional. Sound authoritative but not hostile.`;
+    };
+    
+    hrEngine.onStatus = (msg) => {
+        const statusEl = document.getElementById('voiceStatus');
+        const visualizer = document.querySelector('.google-live-visualizer');
+        if (statusEl) statusEl.textContent = msg;
+        
+        if (msg.includes('Established')) {
+            const telemetry = document.getElementById('liveTelemetry');
+            if (telemetry) telemetry.style.display = 'grid';
+            if (statusEl) { statusEl.classList.remove('text-accent'); statusEl.classList.add('text-primary'); }
+            if (visualizer) visualizer.style.filter = 'none';
+        }
+        if (msg.includes('Speaking')) {
+            if (visualizer) visualizer.classList.add('ai-speaking');
+        }
+        if (msg.includes('Listening')) {
+            if (visualizer) visualizer.classList.remove('ai-speaking');
+        }
+        if (msg.includes('Interrupted')) {
+            if (visualizer) {
+                visualizer.style.filter = 'hue-rotate(120deg) saturate(1.5)';
+                setTimeout(() => visualizer.style.filter = 'none', 1000);
+            }
+        }
+    };
+    
+    hrEngine.onMessage = (role, text) => {
+        if (role === 'assistant') {
+            typewriterBubble('ai', text);
+            if (text.toLowerCase().includes('conclude') || text.toLowerCase().includes('complete') || text.toLowerCase().includes('thank you for your time')) {
+                // Mark session completed and redirect to report
+                setTimeout(() => {
+                    fetch(BASE + '/api/end-round.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ session_id: SESSION_ID, force_complete: true })
+                    }).then(() => {
+                        window.location.href = BASE + '/app/hr-report-rich.php?session_id=' + SESSION_ID;
+                    });
+                }, 3000);
+            }
+        }
+    };
+    
+    hrEngine.onTurnComplete = () => {
+        const latencyEl = document.getElementById('valLatency');
+        const pauseEl = document.getElementById('valPauses');
+        if (latencyEl && hrEngine.metrics.questionCount > 0) {
+            latencyEl.textContent = 'Q' + hrEngine.metrics.questionCount + ' / <?= count($hrQuestionsList) ?>';
+        }
+        if (pauseEl) pauseEl.textContent = 'Active';
+    };
+    
+    hrEngine.init();
+}
+
+// ---- TEXT MODE FUNCTIONS ----
 function loadRound() {
     fetch(API_CHAT, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ session_id: SESSION_ID, get_opener: true }) })
     .then(r => r.json())
@@ -298,7 +473,6 @@ function triggerAnalysis() {
     const bar = document.getElementById('loaderBar');
     overlay.style.display = 'flex';
     
-    // Cinematic stages
     const stages = [
         "Calibrating behavioral baselines...",
         "Profiling response consistency (Round 3)...",
@@ -314,7 +488,6 @@ function triggerAnalysis() {
         }
     }, 2200);
 
-    // Simulated Progress Bar (0 to 95%)
     let pct = 0;
     const barInterval = setInterval(() => {
         if (pct < 95) {
@@ -330,7 +503,6 @@ function triggerAnalysis() {
         clearInterval(barInterval);
         if (data.error) { document.getElementById('analysisHeading').textContent = 'Analysis Failed'; status.textContent = data.error; return; }
         
-        // Finalize bar and redirect
         bar.style.width = '100%';
         status.textContent = "Audit Complete. Redirecting...";
         setTimeout(() => {
@@ -357,7 +529,7 @@ function typewriterBubble(type, text) {
     container.appendChild(div);
 
     let i = 0;
-    const speed = Math.max(8, Math.min(25, 2000 / text.length)); // adaptive speed
+    const speed = Math.max(8, Math.min(25, 2000 / text.length));
     function type_() {
         if (i < text.length) {
             bubble.textContent += text.charAt(i); i++;
@@ -431,20 +603,23 @@ function updatePressure() {
     const total = Math.min(base + ex + 10, 100);
     const fill = document.getElementById('pressureFill');
     fill.style.width = total + '%';
-    // Color shift: blue → yellow → red
     if (total < 35) fill.style.background = 'linear-gradient(to right, #3B82F6, #60A5FA)';
     else if (total < 65) fill.style.background = 'linear-gradient(to right, #3B82F6, #FBBF24)';
     else fill.style.background = 'linear-gradient(to right, #FBBF24, #EF4444)';
 }
 
-// UI TIGHTENING — reduce padding as pressure increases
 function tightenUI() {
     const pct = Math.min((round - 1) * 20 + exchanges * 3 + 10, 100);
     const newPad = Math.max(12, basePadding - (pct * 0.12));
     document.querySelectorAll('.message-bubble').forEach(b => { b.style.padding = `${newPad}px ${newPad + 4}px`; });
 }
 
-function enableInput() { document.getElementById('userInput').disabled = false; document.getElementById('userInput').focus(); updateSendBtn(); }
+function enableInput() { 
+    if (SESSION_MODE === 'hr') return;
+    document.getElementById('userInput').disabled = false; 
+    document.getElementById('userInput').focus(); 
+    updateSendBtn(); 
+}
 function disableInput() { document.getElementById('userInput').disabled = true; document.getElementById('sendBtn').disabled = true; }
 function updateSendBtn() { document.getElementById('sendBtn').disabled = document.getElementById('userInput').value.trim().length < 10 || waiting; }
 </script>
