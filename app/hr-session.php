@@ -106,71 +106,73 @@ $candidateName = $session['candidate_name'] ?: $user['username'];
 
   const micBtn = document.getElementById('micBtn');
   const micIcon = document.getElementById('micIcon');
-  const ring = document.getElementById('ring');
-  const statusEl = document.getElementById('status');
-  const progressEl = document.getElementById('progress');
-  const aPanel = document.getElementById('assistantPanel');
-  const aText = document.getElementById('assistantText');
-  const uPanel = document.getElementById('userPanel');
-  const uText = document.getElementById('userText');
-  const debugEl = document.getElementById('debug');
-  const overlay = document.getElementById('overlay');
+  const ring = document.getElementById('ring') || document.getElementById('breatheRing');
+  const statusEl = document.getElementById('status') || document.getElementById('micStatus');
+  const progressEl = document.getElementById('progress') || document.getElementById('questionProgress');
+  const aPanel = document.getElementById('assistantPanel') || document.getElementById('voiceResponse');
+  const aText = document.getElementById('assistantText') || document.getElementById('responseText');
+  const uPanel = document.getElementById('userPanel') || document.getElementById('voiceTranscript');
+  const uText = document.getElementById('userText') || document.getElementById('transcriptText');
+  const overlay = document.getElementById('overlay') || document.getElementById('analysisOverlay');
 
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
   const TOTAL = 9;
   const MAX_ANSWER_MS = 30000;
-  const SILENCE_MS = 900;
-  const POLL_MS = 70;
+  const END_SILENCE_MS = 1000;
+  const POLL_MS = 80;
 
-  let state = 'IDLE';
   let running = false;
   let recognizer = null;
-  let listening = false;
+  let micHot = false;
+  let speakingNow = false;
 
   let liveFinal = '';
   let liveInterim = '';
-  let speechStartedAt = 0;
   let lastSpeechAt = 0;
+  let speechStartAt = 0;
 
   let userName = '';
-  let qIndex = 0;
   let qa = [];
 
-  function log(msg){
-    console.log(msg);
-    debugEl.textContent += '\n' + msg;
-    debugEl.scrollTop = debugEl.scrollHeight;
-  }
-  function setStatus(s){ statusEl.textContent = s; }
-  function setProgress(s){ progressEl.textContent = s; }
-  function showAssistant(t){ aPanel.style.display='block'; aText.textContent=t; }
-  function showUser(t){ uPanel.style.display='block'; uText.textContent=t || '(no speech detected)'; }
-  function setMic(active){
-    micBtn.classList.toggle('listening', active);
-    ring.classList.toggle('active', active);
-    micIcon.className = active ? 'fa-solid fa-stop' : 'fa-solid fa-microphone';
+  function setStatus(t){ if(statusEl) statusEl.textContent = t; }
+  function setProgress(t){ if(progressEl) progressEl.textContent = t; }
+  function showAssistant(t){ if(aPanel) aPanel.style.display='block'; if(aText) aText.textContent=t; }
+  function showUser(t){ if(uPanel) uPanel.style.display='block'; if(uText) uText.textContent=t || '(no response)'; }
+
+  function setMicUI(active){
+    micBtn?.classList.toggle('listening', active);
+    ring?.classList.toggle('active', active);
+    if(micIcon) micIcon.className = active ? 'fa-solid fa-stop' : 'fa-solid fa-microphone';
   }
 
+  function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+
   function speak(text){
-    return new Promise((resolve)=>{
+    return new Promise((resolve) => {
       showAssistant(text);
       setStatus('AUDITOR SPEAKING...');
       if (!('speechSynthesis' in window)) return resolve();
+      speakingNow = true;
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
-      u.rate = 0.99; u.pitch = 1.0;
-      u.onend = resolve; u.onerror = resolve;
+      u.rate = 0.98;
+      u.pitch = 1.0;
+      u.onend = () => { speakingNow = false; resolve(); };
+      u.onerror = () => { speakingNow = false; resolve(); };
       window.speechSynthesis.speak(u);
     });
   }
 
-  function resetBuffer(){
-    liveFinal=''; liveInterim=''; speechStartedAt=0; lastSpeechAt=0;
+  function resetBuffers(){
+    liveFinal = '';
+    liveInterim = '';
+    lastSpeechAt = 0;
+    speechStartAt = 0;
   }
 
   function initRecognizer(){
-    if (!SR) return false;
+    if(!SR) return false;
     recognizer = new SR();
     recognizer.lang = 'en-US';
     recognizer.interimResults = true;
@@ -186,33 +188,30 @@ $candidateName = $session['candidate_name'] ?: $user['username'];
         else interim += (interim ? ' ' : '') + t;
       }
       liveInterim = interim.trim();
+
       const now = Date.now();
-      if(!speechStartedAt) speechStartedAt = now;
+      if(!speechStartAt) speechStartAt = now;
       lastSpeechAt = now;
-      const txt = [liveFinal, liveInterim].filter(Boolean).join(' ').trim();
-      if(txt) showUser(txt);
+
+      if(!speakingNow){
+        const preview = [liveFinal, liveInterim].filter(Boolean).join(' ').trim();
+        if(preview) showUser(preview);
+      }
     };
 
-    recognizer.onerror = (e) => {
-      log('Recognizer error: ' + (e.error || 'unknown'));
-      if (listening && running) setTimeout(() => { try{ recognizer.start(); }catch{} }, 120);
+    recognizer.onerror = () => {
+      if(micHot && running){
+        setTimeout(() => { try{ recognizer.start(); }catch(_){} }, 120);
+      }
     };
+
     recognizer.onend = () => {
-      if (listening && running) setTimeout(() => { try{ recognizer.start(); }catch{} }, 120);
+      if(micHot && running){
+        setTimeout(() => { try{ recognizer.start(); }catch(_){} }, 120);
+      }
     };
-    return true;
-  }
 
-  function startListening(){
-    if(!recognizer && !initRecognizer()) return false;
-    if(listening) return true;
-    listening = true;
-    try{ recognizer.start(); } catch(e){ log('startListening failed: ' + e.message); }
     return true;
-  }
-  function stopListening(){
-    listening = false;
-    try{ recognizer && recognizer.stop(); } catch{}
   }
 
   async function ensureMicPermission(){
@@ -220,57 +219,74 @@ $candidateName = $session['candidate_name'] ?: $user['username'];
       const s = await navigator.mediaDevices.getUserMedia({audio:true});
       s.getTracks().forEach(t => t.stop());
       return true;
-    }catch(e){
-      log('Mic permission denied: ' + e.message);
+    }catch{
       return false;
     }
   }
 
-  async function captureAnswer(){
+  function startMic(){
+    if(!recognizer && !initRecognizer()) return false;
+    if(micHot) return true;
+    micHot = true;
+    try{ recognizer.start(); }catch{}
+    return true;
+  }
+
+  function stopMic(){
+    micHot = false;
+    try{ recognizer?.stop(); }catch{}
+  }
+
+  async function captureOne({maxMs = MAX_ANSWER_MS, silenceMs = END_SILENCE_MS} = {}){
+    resetBuffers();
     setStatus('LISTENING...');
     const started = Date.now();
-    const baseline = liveFinal;
 
     return new Promise((resolve) => {
       const timer = setInterval(() => {
         const now = Date.now();
         const elapsed = now - started;
-        const newFinal = liveFinal.slice(baseline.length).trim();
-        const combined = [newFinal, liveInterim].filter(Boolean).join(' ').trim();
+        const txt = [liveFinal, liveInterim].filter(Boolean).join(' ').trim();
 
-        const hasSpeech = combined.length > 0;
+        // finalize on silence after speech
         const silenceFor = lastSpeechAt ? (now - lastSpeechAt) : Infinity;
-
-        if(hasSpeech && silenceFor >= SILENCE_MS){
+        if(txt && silenceFor >= silenceMs){
           clearInterval(timer);
-          return resolve(combined);
+          resolve(txt);
+          return;
         }
-        if(elapsed >= MAX_ANSWER_MS){
+
+        // hard timeout
+        if(elapsed >= maxMs){
           clearInterval(timer);
-          return resolve(combined);
+          resolve(txt);
         }
       }, POLL_MS);
     });
   }
 
-  function nextQuestion(idx, history){
+  function cleanName(s){
+    return (s || '').replace(/[^\p{L}\p{N}\s'-]/gu,'').trim().split(/\s+/).slice(0,3).join(' ');
+  }
+
+  function getQuestion(i, history){
     const base = [
       "Tell me about a significant challenge at work and how you handled it.",
       "How do you handle disagreements with colleagues or managers?",
-      "Describe how you worked under a tight deadline.",
-      "Tell me about a time you received critical feedback.",
-      "How do you prioritize when everything is urgent?",
-      "Describe a time you led people through ambiguity.",
-      "Tell me about a mistake and what you learned.",
-      "How do you stay effective under sustained pressure?",
+      "Describe how you managed a very tight deadline.",
+      "Tell me about a time you received difficult feedback.",
+      "How do you prioritize when multiple urgent tasks arrive together?",
+      "Describe a time you led people through uncertainty.",
+      "Tell me about a mistake and what you learned from it.",
+      "How do you stay effective during prolonged pressure?",
       "What professional achievement are you most proud of and why?"
     ];
-    if(idx===0) return base[0];
-    const prev = (history[history.length-1]?.answer || '').toLowerCase();
-    if(prev.includes('team')) return "You mentioned teams. How do you handle underperforming team members?";
-    if(prev.includes('mistake') || prev.includes('fail')) return "How did you rebuild trust after that situation?";
-    if(prev.includes('stress') || prev.includes('pressure')) return "What concrete technique helps you regulate under stress?";
-    return base[Math.min(idx, base.length-1)];
+    if(i === 0) return base[0];
+    const prev = (history[history.length - 1]?.answer || '').toLowerCase();
+    if(prev.includes('team')) return "You mentioned team context. How do you handle an underperforming team member?";
+    if(prev.includes('mistake') || prev.includes('fail')) return "How did you rebuild confidence after that incident?";
+    if(prev.includes('stress') || prev.includes('pressure')) return "What concrete method helps you regulate stress in the moment?";
+    return base[i] || base[base.length - 1];
   }
 
   async function pushMessage(role, content){
@@ -280,120 +296,121 @@ $candidateName = $session['candidate_name'] ?: $user['username'];
         headers:{'Content-Type':'application/json'},
         body: JSON.stringify({session_id: SESSION_ID, role, content})
       });
-    }catch(e){ log('pushMessage failed: ' + e.message); }
+    }catch{}
   }
 
-  function cleanName(t){
-    return (t || '').replace(/[^\p{L}\p{N}\s'-]/gu,'').trim().split(/\s+/).slice(0,3).join(' ');
+  async function getAnswerWithFallback(questionNo){
+    let ans = await captureOne({maxMs: 30000, silenceMs: 1000});
+    if(ans) return ans;
+
+    // retry once quickly
+    await speak("I did not catch that clearly. Please repeat your answer.");
+    ans = await captureOne({maxMs: 20000, silenceMs: 1000});
+    if(ans) return ans;
+
+    // final fallback typing
+    return prompt(`Question ${questionNo}: I couldn't hear you. Please type your answer:`) || '';
   }
 
-  async function runInterview(){
-    setProgress('IDENTITY');
-    const intro = "Good day. I am your executive auditor. Please tell me your full name.";
-    await speak(intro); await pushMessage('assistant', intro);
-
-    resetBuffer();
-    let nameAns = await captureAnswer();
-    if(!nameAns){
-      nameAns = prompt('Could not hear clearly. Please type your full name:') || '';
-    }
-    userName = cleanName(nameAns) || CANDIDATE_NAME || 'Candidate';
-    showUser(userName);
-    await pushMessage('user', userName);
-
-    setProgress('BRIEFING');
-    const brief = `Welcome, ${userName}. We will do ${TOTAL} adaptive questions. Please answer naturally.`;
-    await speak(brief); await pushMessage('assistant', brief);
-
-    qIndex = 0; qa = [];
-    while(running && qIndex < TOTAL){
-      setProgress(`QUESTION ${qIndex+1} OF ${TOTAL}`);
-      const q = nextQuestion(qIndex, qa);
-
-      await speak(`Question ${qIndex+1}. ${q}`);
-      await pushMessage('assistant', `Question ${qIndex+1}. ${q}`);
-
-      resetBuffer();
-      let ans = await captureAnswer();
-      if(!ans){
-        ans = prompt(`I could not catch Question ${qIndex+1}. Type your answer (optional):`) || '';
-      }
-      showUser(ans || '(no response)');
-      await pushMessage('user', ans || '(no response)');
-      qa.push({question:q, answer:ans || ''});
-
-      const ack = ans ? "Noted. Thank you." : "No clear response captured. Moving forward.";
-      await speak(ack);
-      await pushMessage('assistant', ack);
-
-      qIndex++;
-    }
-
-    setProgress('COMPLETED');
-    await speak(`Thank you, ${userName}. Interview completed. Generating report now.`);
-    overlay.style.display = 'flex';
+  async function completeInterview(){
+    setProgress('GENERATING REPORT');
     setStatus('GENERATING REPORT...');
+    if(overlay) overlay.style.display = 'flex';
 
     try{
       await fetch(BASE + '/api/analyze.php', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({session_id: SESSION_ID, force_complete: true})
+        body: JSON.stringify({ session_id: SESSION_ID, force_complete: true })
       });
       window.location.href = BASE + '/app/hr-report-rich.php?session_id=' + SESSION_ID;
-    }catch(e){
-      log('Analyze failed: ' + e.message);
+    }catch{
       window.location.href = BASE + '/app/dashboard.php';
     }
+  }
+
+  async function runFlow(){
+    setProgress('IDENTITY');
+    await speak("Welcome. Please say your full name for the record.");
+    await pushMessage('assistant', 'Welcome. Please say your full name for the record.');
+
+    const nameRaw = await getAnswerWithFallback('Name');
+    userName = cleanName(nameRaw) || CANDIDATE_NAME || 'Candidate';
+    showUser(userName);
+    await pushMessage('user', userName);
+
+    await speak(`Thank you, ${userName}. We will now begin a nine question behavioral interview.`);
+    await pushMessage('assistant', `Thank you, ${userName}. We will now begin a nine question behavioral interview.`);
+
+    qa = [];
+    for(let i=0; i<TOTAL && running; i++){
+      setProgress(`QUESTION ${i+1} OF ${TOTAL}`);
+      const q = getQuestion(i, qa);
+
+      await speak(`Question ${i+1}. ${q}`);
+      await pushMessage('assistant', `Question ${i+1}. ${q}`);
+
+      const ans = await getAnswerWithFallback(i+1);
+      showUser(ans || '(no response)');
+      await pushMessage('user', ans || '(no response)');
+
+      qa.push({question:q, answer:ans || ''});
+
+      await speak(ans ? "Noted. Thank you." : "No clear response captured. Moving to next question.");
+      await pushMessage('assistant', ans ? "Noted. Thank you." : "No clear response captured. Moving to next question.");
+
+      await sleep(250);
+    }
+
+    if(!running) return;
+    await speak(`Thank you ${userName}. Interview is complete.`);
+    await pushMessage('assistant', `Thank you ${userName}. Interview is complete.`);
+    await completeInterview();
   }
 
   async function startFlow(){
     if(running) return;
     running = true;
-    state = 'RUNNING';
-    setMic(true);
+    setMicUI(true);
     setStatus('INITIALIZING...');
 
-    const okPerm = await ensureMicPermission();
-    if(!okPerm){
-      alert('Microphone permission is blocked. Please allow mic access and reload.');
+    const perm = await ensureMicPermission();
+    if(!perm){
+      alert('Microphone permission is blocked. Allow mic access and reload.');
       stopFlow();
       return;
     }
 
     if(!initRecognizer()){
-      alert('SpeechRecognition API not supported in this browser. Use latest Chrome/Edge.');
+      alert('SpeechRecognition not supported. Use latest Chrome/Edge.');
       stopFlow();
       return;
     }
 
-    startListening();
+    startMic();
+
     try{
-      await runInterview();
+      await runFlow();
     }catch(e){
-      log('runInterview crash: ' + e.message);
-      alert('Interview failed due to runtime error. Check debug panel.');
+      console.error(e);
+      alert('Interview flow error. Please refresh and retry.');
       stopFlow();
     }
   }
 
   function stopFlow(){
     running = false;
-    state = 'IDLE';
-    stopListening();
+    stopMic();
     window.speechSynthesis?.cancel();
-    setMic(false);
+    setMicUI(false);
     setStatus('TAP TO BEGIN AUDIT');
-    if (!String(progressEl.textContent).includes('COMPLETED')) setProgress('READY');
+    setProgress('READY');
   }
 
-  micBtn.addEventListener('click', async () => {
-    log('Mic button clicked. running=' + running);
+  micBtn?.addEventListener('click', async () => {
     if(running) stopFlow();
     else await startFlow();
   });
-
-  log('Page ready. SpeechRecognition=' + (!!SR));
 })();
 </script>
 </body>
