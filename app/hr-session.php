@@ -223,7 +223,7 @@ $candidateName = $session['candidate_name'] ?: $user['username'];
             <div class="hr-header">
                 <div class="badge-label">EXECUTIVE BEHAVIORAL AUDIT</div>
                 <h1>Candidate: <span><?= htmlspecialchars($candidateName) ?></span></h1>
-                <div class="sub">Voice-driven structured interview · 9 questions</div>
+                <div class="sub">Voice-driven structured interview · 9 adaptive questions</div>
                 <div id="questionProgress">READY</div>
             </div>
 
@@ -258,99 +258,6 @@ $candidateName = $session['candidate_name'] ?: $user['username'];
         <p>Analyzing behavioral patterns and vocal response metrics.</p>
     </div>
 
-<!-- Realtime background mic capture engine -->
-<script>
-const _SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-let _recognizer = null;
-let _bgListening = false;
-let _liveInterim = '';
-let _liveFinal = '';
-let _lastSpeechAt = 0;
-
-function initRecognizer() {
-    if (!_SR) return false;
-    _recognizer = new _SR();
-    _recognizer.lang = 'en-US';
-    _recognizer.interimResults = true;
-    _recognizer.continuous = true;
-    _recognizer.maxAlternatives = 1;
-
-    _recognizer.onresult = (event) => {
-        let interimChunk = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-            const t = event.results[i][0].transcript || '';
-            if (event.results[i].isFinal) {
-                _liveFinal += (_liveFinal ? ' ' : '') + t.trim();
-            } else {
-                interimChunk += (interimChunk ? ' ' : '') + t.trim();
-            }
-        }
-        _liveInterim = interimChunk.trim();
-        _lastSpeechAt = Date.now();
-    };
-
-    _recognizer.onerror = () => {
-        if (_bgListening) {
-            setTimeout(() => { try { _recognizer.start(); } catch (_) {} }, 250);
-        }
-    };
-
-    _recognizer.onend = () => {
-        if (_bgListening) {
-            setTimeout(() => { try { _recognizer.start(); } catch (_) {} }, 150);
-        }
-    };
-
-    return true;
-}
-
-function startBackgroundListening() {
-    if (!_recognizer && !initRecognizer()) return false;
-    if (_bgListening) return true;
-    _bgListening = true;
-    try { _recognizer.start(); } catch (_) {}
-    return true;
-}
-
-function stopBackgroundListening() {
-    _bgListening = false;
-    try { _recognizer?.stop(); } catch (_) {}
-}
-
-function clearLiveBuffer() {
-    _liveInterim = '';
-    _liveFinal = '';
-    _lastSpeechAt = 0;
-}
-
-function captureAnswerFromBackground({ minWaitMs = 2000, maxWaitMs = 20000, silenceDoneMs = 1800 } = {}) {
-    const startedAt = Date.now();
-    const baseFinal = _liveFinal;
-    startBackgroundListening();
-
-    return new Promise((resolve) => {
-        const tick = setInterval(() => {
-            const now = Date.now();
-            const elapsed = now - startedAt;
-            const newFinal = _liveFinal.slice(baseFinal.length).trim();
-            const combined = (newFinal + ' ' + _liveInterim).trim();
-            const hasSpeech = combined.length > 0;
-            const silenceFor = _lastSpeechAt ? (now - _lastSpeechAt) : 999999;
-
-            if (elapsed >= minWaitMs && hasSpeech && silenceFor >= silenceDoneMs) {
-                clearInterval(tick);
-                resolve(combined);
-                return;
-            }
-            if (elapsed >= maxWaitMs) {
-                clearInterval(tick);
-                resolve(combined);
-            }
-        }, 120);
-    });
-}
-</script>
-
 <script type="module">
 document.addEventListener('DOMContentLoaded', function () {
     const BASE = '<?= BASE_URL ?>';
@@ -370,38 +277,30 @@ document.addEventListener('DOMContentLoaded', function () {
     const replayBtn = document.getElementById('replayBtn');
     const analysisOverlay = document.getElementById('analysisOverlay');
 
-    // ---- Flow State Machine ----
-    const FLOW = {
-        IDLE: 'IDLE',
-        ASK_NAME: 'ASK_NAME',
-        GREET: 'GREET',
-        ASKING: 'ASKING',
-        FINISHED: 'FINISHED'
-    };
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-    let flowState = FLOW.IDLE;
+    // ---------- Config ----------
+    const TOTAL_QUESTIONS = 9;
+    const SILENCE_STOP_MS = 1800;
+    const NEXT_QUESTION_DELAY_MS = 8000;
+
+    // ---------- State ----------
     let running = false;
+    let flowState = 'IDLE';
     let lastAssistantText = '';
-    let userName = '';
-    let currentQuestionIndex = -1;
-    let answers = [];
+    let userName = 'Friend';
+    let qaHistory = [];
+    let qIndex = 0;
 
-    // ---- HR Behavioral Interview Questions ----
-    const QUESTIONS = [
-        "Tell me about a time you faced a significant challenge at work. How did you handle it?",
-        "How do you handle disagreements with colleagues or supervisors?",
-        "Describe a situation where you had to meet a tight deadline. What was your approach?",
-        "Tell me about a time you received critical feedback. How did you respond?",
-        "How do you prioritize tasks when you have multiple urgent deadlines?",
-        "Describe a situation where you had to lead a team through a difficult project.",
-        "Tell me about a time you made a mistake at work. What did you learn from it?",
-        "How do you handle working under pressure or in a high-stress environment?",
-        "What is one professional accomplishment you are most proud of, and why?"
-    ];
+    // realtime mic buffer
+    let recognizer = null;
+    let bgListening = false;
+    let liveInterim = '';
+    let liveFinal = '';
+    let lastSpeechAt = 0;
 
-    function setStatus(text) {
-        micStatus.textContent = text;
-    }
+    // ---------- UI Helpers ----------
+    function setStatus(text) { micStatus.textContent = text; }
 
     function setMicUI(active) {
         if (active) {
@@ -426,6 +325,8 @@ document.addEventListener('DOMContentLoaded', function () {
         responseWrap.style.display = 'block';
     }
 
+    function sleep(ms) { return new Promise(res => setTimeout(res, ms)); }
+
     function speak(text) {
         return new Promise((resolve) => {
             if (!('speechSynthesis' in window)) return resolve();
@@ -445,18 +346,104 @@ document.addEventListener('DOMContentLoaded', function () {
         await speak(text);
     }
 
-    // Uses the background realtime mic capture
-    async function listenForAnswer(maxMs = 20000) {
-        setStatus('LISTENING...');
-        clearLiveBuffer();
-        const ans = await captureAnswerFromBackground({
-            minWaitMs: 2500,
-            maxWaitMs: maxMs,
-            silenceDoneMs: 1800
-        });
-        return (ans || '').trim();
+    replayBtn?.addEventListener('click', () => {
+        if (lastAssistantText) speak(lastAssistantText);
+    });
+
+    // ---------- Recognition ----------
+    function initRecognizer() {
+        if (!SR) return false;
+
+        recognizer = new SR();
+        recognizer.lang = 'en-US';
+        recognizer.interimResults = true;
+        recognizer.continuous = true;
+        recognizer.maxAlternatives = 1;
+
+        recognizer.onresult = (event) => {
+            let interimChunk = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                const t = (event.results[i][0]?.transcript || '').trim();
+                if (!t) continue;
+                if (event.results[i].isFinal) {
+                    liveFinal += (liveFinal ? ' ' : '') + t;
+                } else {
+                    interimChunk += (interimChunk ? ' ' : '') + t;
+                }
+            }
+            liveInterim = interimChunk.trim();
+            lastSpeechAt = Date.now();
+
+            // live preview of what user is saying
+            const liveText = [liveFinal, liveInterim].filter(Boolean).join(' ').trim();
+            if (liveText) showUserText(liveText);
+        };
+
+        recognizer.onerror = () => {
+            if (bgListening && running) {
+                setTimeout(() => { try { recognizer.start(); } catch (_) {} }, 200);
+            }
+        };
+
+        recognizer.onend = () => {
+            if (bgListening && running) {
+                setTimeout(() => { try { recognizer.start(); } catch (_) {} }, 150);
+            }
+        };
+
+        return true;
     }
 
+    function startBackgroundListening() {
+        if (!recognizer && !initRecognizer()) return false;
+        if (bgListening) return true;
+        bgListening = true;
+        try { recognizer.start(); } catch (_) {}
+        return true;
+    }
+
+    function stopBackgroundListening() {
+        bgListening = false;
+        try { recognizer?.stop(); } catch (_) {}
+    }
+
+    function clearBuffer() {
+        liveInterim = '';
+        liveFinal = '';
+        lastSpeechAt = 0;
+    }
+
+    async function captureUntilSilence(maxWaitMs = 60000) {
+        const started = Date.now();
+        const baselineFinal = liveFinal;
+
+        setStatus('LISTENING...');
+        return new Promise((resolve) => {
+            const t = setInterval(() => {
+                const now = Date.now();
+                const elapsed = now - started;
+
+                const newFinal = liveFinal.slice(baselineFinal.length).trim();
+                const combined = [newFinal, liveInterim].filter(Boolean).join(' ').trim();
+
+                const hasSpeech = combined.length > 0;
+                const silenceFor = lastSpeechAt ? (now - lastSpeechAt) : Infinity;
+
+                if (hasSpeech && silenceFor >= SILENCE_STOP_MS) {
+                    clearInterval(t);
+                    resolve(combined);
+                    return;
+                }
+
+                if (elapsed >= maxWaitMs) {
+                    clearInterval(t);
+                    resolve(combined);
+                }
+            }, 120);
+        });
+    }
+
+    // ---------- Context-Aware Question Generator ----------
     function cleanName(v) {
         return (v || '')
             .replace(/[^\p{L}\p{N}\s'-]/gu, '')
@@ -466,9 +453,53 @@ document.addEventListener('DOMContentLoaded', function () {
             .join(' ');
     }
 
-    function ackForAnswer(i, ans) {
-        if (!ans) return "I didn't catch that clearly, but let's continue to the next question.";
-        const short = ans.split(' ').slice(0, 12).join(' ');
+    function pickNextQuestion(index, history) {
+        const base = [
+            "Tell me about a time you faced a significant challenge at work. How did you handle it?",
+            "How do you typically handle disagreements with colleagues or supervisors?",
+            "Describe a situation where you had to meet a very tight deadline. What was your approach?",
+            "Tell me about a time you received critical feedback. How did you respond to it?",
+            "How do you prioritize tasks when you have multiple urgent deadlines competing for attention?",
+            "Describe a situation where you had to lead a team through a difficult or ambiguous project.",
+            "Tell me about a time you made a mistake at work. What did you learn from it?",
+            "How do you handle working under sustained pressure or in a high-stress environment?",
+            "What is one professional accomplishment you are most proud of, and why does it matter to you?"
+        ];
+
+        if (index === 0) return base[0];
+
+        const prev = history[history.length - 1] || {};
+        const a = (prev.answer || '').toLowerCase();
+
+        // Context-adaptive follow-ups based on previous answer
+        if (a.includes('team') || a.includes('collaborat') || a.includes('group')) {
+            return "You mentioned team dynamics. How do you handle situations where a team member is underperforming?";
+        }
+        if (a.includes('fail') || a.includes('mistake') || a.includes('wrong')) {
+            return "You mentioned a setback. How do you ensure you recover and maintain credibility after a failure?";
+        }
+        if (a.includes('lead') || a.includes('manag') || a.includes('delegat')) {
+            return "You mentioned leadership. What is your approach to delegating tasks while maintaining accountability?";
+        }
+        if (a.includes('stress') || a.includes('pressure') || a.includes('overwhelm')) {
+            return "You mentioned high pressure. What specific techniques do you use to stay composed under stress?";
+        }
+        if (a.includes('conflict') || a.includes('disagree') || a.includes('argument')) {
+            return "You brought up conflict. Can you describe how you turned a professional disagreement into a productive outcome?";
+        }
+        if (a.includes('deadline') || a.includes('time') || a.includes('urgent')) {
+            return "Time pressure came up. How do you decide what to sacrifice when you genuinely cannot meet every deadline?";
+        }
+        if (a.includes('feedback') || a.includes('criticism') || a.includes('review')) {
+            return "Feedback is important. How do you give constructive criticism to someone senior to you?";
+        }
+
+        return base[Math.min(index, base.length - 1)];
+    }
+
+    function acknowledgment(answer) {
+        if (!answer) return "I didn't catch that clearly. Let's move on to the next question.";
+        const short = answer.split(/\s+/).slice(0, 12).join(' ');
         return `Noted. I heard: "${short}..." — Thank you. Moving on.`;
     }
 
@@ -484,8 +515,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // ---- FLOW STEPS ----
-
+    // ---------- Time Greeting ----------
     function getTimeGreeting() {
         const h = new Date().getHours();
         if (h < 12) return 'Good morning';
@@ -493,59 +523,65 @@ document.addEventListener('DOMContentLoaded', function () {
         return 'Good evening';
     }
 
-    async function askNameStep() {
-        flowState = FLOW.ASK_NAME;
+    // ---------- Main Flow ----------
+    async function runFlow() {
+        // Step 1: Ask Name
+        flowState = 'ASK_NAME';
         progressEl.textContent = 'IDENTITY CALIBRATION';
         const greeting = getTimeGreeting();
-        await speakAndShow(`${greeting}. I am your Senior Executive Auditor. Before we begin the behavioral audit, may I know your full name for the record?`);
+        await speakAndShow(`${greeting}. I am your Senior Executive Auditor for today's session. Before we begin the behavioral audit, may I know your full name for the record?`);
         await pushMessage('assistant', lastAssistantText);
 
-        const nameHeard = await listenForAnswer(10000);
-        showUserText(nameHeard || '(no speech detected)');
-        userName = cleanName(nameHeard) || CANDIDATE_NAME;
+        clearBuffer();
+        const nameAnswer = await captureUntilSilence(30000);
+        showUserText(nameAnswer || '(no speech detected)');
+        userName = cleanName(nameAnswer) || CANDIDATE_NAME;
         await pushMessage('user', userName);
-    }
 
-    async function greetStep() {
-        flowState = FLOW.GREET;
+        // Step 2: Greet & Brief
+        flowState = 'GREET';
         progressEl.textContent = 'BRIEFING';
-        await speakAndShow(`Welcome, ${userName}. This is a structured behavioral interview consisting of ${QUESTIONS.length} questions. Answer each question thoroughly and honestly. Your responses will be evaluated on clarity, depth, and professionalism. Let us begin.`);
+        await speakAndShow(`Welcome, ${userName}. This is a structured behavioral interview consisting of ${TOTAL_QUESTIONS} adaptive questions. Answer each question thoroughly and honestly. Your responses will be evaluated on clarity, depth, and professionalism. Let us begin.`);
         await pushMessage('assistant', lastAssistantText);
-    }
 
-    async function questionnaireStep() {
-        flowState = FLOW.ASKING;
-        answers = [];
+        // Step 3: Question Loop
+        flowState = 'QUESTIONS';
+        qIndex = 0;
+        qaHistory = [];
 
-        for (let i = 0; i < QUESTIONS.length; i++) {
-            if (!running) return;
-            currentQuestionIndex = i;
-            progressEl.textContent = `QUESTION ${i + 1} OF ${QUESTIONS.length}`;
+        while (running && qIndex < TOTAL_QUESTIONS) {
+            const question = pickNextQuestion(qIndex, qaHistory);
+            progressEl.textContent = `QUESTION ${qIndex + 1} OF ${TOTAL_QUESTIONS}`;
 
-            const qText = `Question ${i + 1}. ${QUESTIONS[i]}`;
+            const qText = `Question ${qIndex + 1}. ${question}`;
             await speakAndShow(qText);
             await pushMessage('assistant', qText);
 
-            const ans = await listenForAnswer(25000);
-            showUserText(ans || '(no speech detected)');
-            answers.push({
-                question_no: i + 1,
-                question: QUESTIONS[i],
-                answer: ans || '(no response)'
-            });
-            await pushMessage('user', ans || '(no response)');
+            clearBuffer();
+            const answer = await captureUntilSilence(60000);
+            showUserText(answer || '(no speech detected)');
 
-            const ack = ackForAnswer(i, ans);
+            qaHistory.push({ question, answer: answer || '' });
+            await pushMessage('user', answer || '(no response)');
+
+            const ack = acknowledgment(answer);
             await speakAndShow(ack);
             await pushMessage('assistant', ack);
-        }
-    }
 
-    async function finishStep() {
-        flowState = FLOW.FINISHED;
+            // Wait before next question
+            if (qIndex < TOTAL_QUESTIONS - 1) {
+                setStatus('NEXT QUESTION IN 8 SECONDS...');
+                await sleep(NEXT_QUESTION_DELAY_MS);
+            }
+
+            qIndex++;
+        }
+
+        // Step 4: Finish & Generate Report
+        flowState = 'DONE';
         stopBackgroundListening();
         progressEl.textContent = 'AUDIT COMPLETE';
-        await speakAndShow(`Thank you, ${userName}. I have recorded all ${QUESTIONS.length} responses. The behavioral audit is now complete. Your Executive Performance Report is being generated.`);
+        await speakAndShow(`Thank you, ${userName}. I have completed all ${TOTAL_QUESTIONS} questions and captured your responses. The behavioral audit is now complete. Your Executive Performance Report is being generated.`);
         await pushMessage('assistant', lastAssistantText);
         setStatus('GENERATING REPORT...');
 
@@ -569,33 +605,18 @@ document.addEventListener('DOMContentLoaded', function () {
         running = true;
         setMicUI(true);
 
-        if (!_SR) {
-            await speakAndShow('Voice input is not supported in this browser. Please use Chrome or Edge.');
+        if (!initRecognizer()) {
+            await speakAndShow('Voice input is not supported in your browser. Please use Chrome or Edge.');
             stopFlow();
             return;
         }
 
-        // Start background mic immediately
         startBackgroundListening();
 
         try {
-            flowState = FLOW.IDLE;
-            userName = '';
-            currentQuestionIndex = -1;
-            answers = [];
             transcriptWrap.style.display = 'none';
             responseWrap.style.display = 'none';
-
-            await askNameStep();
-            if (!running) return;
-
-            await greetStep();
-            if (!running) return;
-
-            await questionnaireStep();
-            if (!running) return;
-
-            await finishStep();
+            await runFlow();
         } catch (e) {
             console.error(e);
             await speakAndShow('An error occurred during the audit. Please refresh and try again.');
@@ -604,24 +625,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function stopFlow() {
         running = false;
-        flowState = FLOW.IDLE;
+        flowState = 'IDLE';
+        stopBackgroundListening();
+        window.speechSynthesis?.cancel();
         setMicUI(false);
         setStatus('TAP TO BEGIN AUDIT');
         progressEl.textContent = 'READY';
-        stopBackgroundListening();
-        window.speechSynthesis?.cancel();
     }
 
-    micBtn.addEventListener('click', async function () {
-        if (running) {
-            stopFlow();
-        } else {
-            await startFlow();
-        }
-    });
-
-    replayBtn?.addEventListener('click', function () {
-        if (lastAssistantText) speak(lastAssistantText);
+    micBtn.addEventListener('click', async () => {
+        if (running) stopFlow();
+        else await startFlow();
     });
 });
 </script>
