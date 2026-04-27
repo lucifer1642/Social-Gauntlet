@@ -258,6 +258,99 @@ $candidateName = $session['candidate_name'] ?: $user['username'];
         <p>Analyzing behavioral patterns and vocal response metrics.</p>
     </div>
 
+<!-- Realtime background mic capture engine -->
+<script>
+const _SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let _recognizer = null;
+let _bgListening = false;
+let _liveInterim = '';
+let _liveFinal = '';
+let _lastSpeechAt = 0;
+
+function initRecognizer() {
+    if (!_SR) return false;
+    _recognizer = new _SR();
+    _recognizer.lang = 'en-US';
+    _recognizer.interimResults = true;
+    _recognizer.continuous = true;
+    _recognizer.maxAlternatives = 1;
+
+    _recognizer.onresult = (event) => {
+        let interimChunk = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+            const t = event.results[i][0].transcript || '';
+            if (event.results[i].isFinal) {
+                _liveFinal += (_liveFinal ? ' ' : '') + t.trim();
+            } else {
+                interimChunk += (interimChunk ? ' ' : '') + t.trim();
+            }
+        }
+        _liveInterim = interimChunk.trim();
+        _lastSpeechAt = Date.now();
+    };
+
+    _recognizer.onerror = () => {
+        if (_bgListening) {
+            setTimeout(() => { try { _recognizer.start(); } catch (_) {} }, 250);
+        }
+    };
+
+    _recognizer.onend = () => {
+        if (_bgListening) {
+            setTimeout(() => { try { _recognizer.start(); } catch (_) {} }, 150);
+        }
+    };
+
+    return true;
+}
+
+function startBackgroundListening() {
+    if (!_recognizer && !initRecognizer()) return false;
+    if (_bgListening) return true;
+    _bgListening = true;
+    try { _recognizer.start(); } catch (_) {}
+    return true;
+}
+
+function stopBackgroundListening() {
+    _bgListening = false;
+    try { _recognizer?.stop(); } catch (_) {}
+}
+
+function clearLiveBuffer() {
+    _liveInterim = '';
+    _liveFinal = '';
+    _lastSpeechAt = 0;
+}
+
+function captureAnswerFromBackground({ minWaitMs = 2000, maxWaitMs = 20000, silenceDoneMs = 1800 } = {}) {
+    const startedAt = Date.now();
+    const baseFinal = _liveFinal;
+    startBackgroundListening();
+
+    return new Promise((resolve) => {
+        const tick = setInterval(() => {
+            const now = Date.now();
+            const elapsed = now - startedAt;
+            const newFinal = _liveFinal.slice(baseFinal.length).trim();
+            const combined = (newFinal + ' ' + _liveInterim).trim();
+            const hasSpeech = combined.length > 0;
+            const silenceFor = _lastSpeechAt ? (now - _lastSpeechAt) : 999999;
+
+            if (elapsed >= minWaitMs && hasSpeech && silenceFor >= silenceDoneMs) {
+                clearInterval(tick);
+                resolve(combined);
+                return;
+            }
+            if (elapsed >= maxWaitMs) {
+                clearInterval(tick);
+                resolve(combined);
+            }
+        }, 120);
+    });
+}
+</script>
+
 <script type="module">
 document.addEventListener('DOMContentLoaded', function () {
     const BASE = '<?= BASE_URL ?>';
@@ -306,17 +399,6 @@ document.addEventListener('DOMContentLoaded', function () {
         "What is one professional accomplishment you are most proud of, and why?"
     ];
 
-    // ---- Speech Recognition Setup ----
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    let recognizer = null;
-    if (SR) {
-        recognizer = new SR();
-        recognizer.lang = 'en-US';
-        recognizer.interimResults = false;
-        recognizer.maxAlternatives = 1;
-        recognizer.continuous = false;
-    }
-
     function setStatus(text) {
         micStatus.textContent = text;
     }
@@ -363,45 +445,16 @@ document.addEventListener('DOMContentLoaded', function () {
         await speak(text);
     }
 
-    function listenOnce(timeoutMs = 15000) {
-        return new Promise((resolve) => {
-            if (!recognizer) return resolve('');
-
-            let done = false;
-            const finish = (val) => {
-                if (done) return;
-                done = true;
-                resolve((val || '').trim());
-            };
-
-            const timer = setTimeout(() => {
-                try { recognizer.stop(); } catch (e) {}
-                finish('');
-            }, timeoutMs);
-
-            recognizer.onresult = (event) => {
-                clearTimeout(timer);
-                const text = event.results?.[0]?.[0]?.transcript || '';
-                finish(text);
-            };
-
-            recognizer.onerror = () => {
-                clearTimeout(timer);
-                finish('');
-            };
-
-            recognizer.onend = () => {
-                // fallback handled by timer
-            };
-
-            try {
-                setStatus('LISTENING...');
-                recognizer.start();
-            } catch (e) {
-                clearTimeout(timer);
-                finish('');
-            }
+    // Uses the background realtime mic capture
+    async function listenForAnswer(maxMs = 20000) {
+        setStatus('LISTENING...');
+        clearLiveBuffer();
+        const ans = await captureAnswerFromBackground({
+            minWaitMs: 2500,
+            maxWaitMs: maxMs,
+            silenceDoneMs: 1800
         });
+        return (ans || '').trim();
     }
 
     function cleanName(v) {
@@ -447,7 +500,7 @@ document.addEventListener('DOMContentLoaded', function () {
         await speakAndShow(`${greeting}. I am your Senior Executive Auditor. Before we begin the behavioral audit, may I know your full name for the record?`);
         await pushMessage('assistant', lastAssistantText);
 
-        const nameHeard = await listenOnce(10000);
+        const nameHeard = await listenForAnswer(10000);
         showUserText(nameHeard || '(no speech detected)');
         userName = cleanName(nameHeard) || CANDIDATE_NAME;
         await pushMessage('user', userName);
@@ -473,7 +526,7 @@ document.addEventListener('DOMContentLoaded', function () {
             await speakAndShow(qText);
             await pushMessage('assistant', qText);
 
-            const ans = await listenOnce(20000);
+            const ans = await listenForAnswer(25000);
             showUserText(ans || '(no speech detected)');
             answers.push({
                 question_no: i + 1,
@@ -490,12 +543,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     async function finishStep() {
         flowState = FLOW.FINISHED;
+        stopBackgroundListening();
         progressEl.textContent = 'AUDIT COMPLETE';
         await speakAndShow(`Thank you, ${userName}. I have recorded all ${QUESTIONS.length} responses. The behavioral audit is now complete. Your Executive Performance Report is being generated.`);
         await pushMessage('assistant', lastAssistantText);
         setStatus('GENERATING REPORT...');
 
-        // Show analysis overlay
         analysisOverlay.style.display = 'flex';
 
         try {
@@ -516,11 +569,14 @@ document.addEventListener('DOMContentLoaded', function () {
         running = true;
         setMicUI(true);
 
-        if (!recognizer) {
+        if (!_SR) {
             await speakAndShow('Voice input is not supported in this browser. Please use Chrome or Edge.');
             stopFlow();
             return;
         }
+
+        // Start background mic immediately
+        startBackgroundListening();
 
         try {
             flowState = FLOW.IDLE;
@@ -552,7 +608,7 @@ document.addEventListener('DOMContentLoaded', function () {
         setMicUI(false);
         setStatus('TAP TO BEGIN AUDIT');
         progressEl.textContent = 'READY';
-        try { recognizer?.stop(); } catch (e) {}
+        stopBackgroundListening();
         window.speechSynthesis?.cancel();
     }
 
