@@ -26,8 +26,21 @@ $input = json_decode(file_get_contents('php://input'), true);
 $sessionId = intval($input['session_id'] ?? 0);
 
 $session = getSession($sessionId, $_SESSION['user_id']);
-if (!$session || $session['status'] !== 'completed') {
-    echo json_encode(['error' => 'Session not found or not completed']);
+if (!$session) {
+    echo json_encode(['error' => 'Session not found']);
+    exit;
+}
+
+// Support for force_complete (used by HR voice module)
+if (isset($input['force_complete']) && $input['force_complete'] === true && $session['status'] === 'active') {
+    $db = getDB();
+    $stmt = $db->prepare('UPDATE sessions SET status = "completed", completed_at = NOW() WHERE id = ?');
+    $stmt->execute([$sessionId]);
+    $session['status'] = 'completed'; // update local variable
+}
+
+if ($session['status'] !== 'completed') {
+    echo json_encode(['error' => 'Session not completed']);
     exit;
 }
 
@@ -72,37 +85,65 @@ $metrics = calculateBehavioralMetrics($transcript);
 $formattedTranscript .= "\n--- BEHAVIORAL DATA ---\n";
 $formattedTranscript .= json_encode($metrics, JSON_PRETTY_PRINT);
 
-// Analysis prompt — concise to avoid token truncation while requesting all chart data
-$analysisPrompt = "You are a communication psychologist. Analyze the transcript and respond with ONLY valid JSON (no markdown, no explanation). Keep all text fields under 100 words each. Be specific but concise. Reference actual quotes. Every audit must be unique — no two analyses should read the same.
+// Analysis prompt — branch based on mode
+$isHR = ($session['mode'] ?? 'standard') === 'hr';
 
-Topic: {$topicDisplay}
-
-{
-    \"strongest_under\": \"Which persona they handled best — cite 1 specific quote (1 short paragraph)\",
-    \"biggest_vulnerability\": \"Their primary weakness — cite their weakest moment (1 short paragraph)\",
-    \"blind_spot\": \"What emotional cue or subtext they missed — specify round and AI quote\",
-    \"pattern_summary\": \"3 recurring linguistic patterns with exact phrases quoted\",
-    \"emotional_tripwire\": \"The exact AI sentence that triggered them and their response\",
-    \"recommendations\": [\"directive 1\",\"directive 2\",\"directive 3\",\"directive 4\"],
-    \"round_analyses\": [
-        {\"round\":1,\"personality\":\"Boss\",\"performance\":\"brief analysis\",\"key_moment\":\"quote\"},
-        {\"round\":2,\"personality\":\"Uncle\",\"performance\":\"brief analysis\",\"key_moment\":\"quote\"},
-        {\"round\":3,\"personality\":\"Investor\",\"performance\":\"brief analysis\",\"key_moment\":\"quote\"},
-        {\"round\":4,\"personality\":\"Coworker\",\"performance\":\"brief analysis\",\"key_moment\":\"quote\"},
-        {\"round\":5,\"personality\":\"Guilt-Tripper\",\"performance\":\"brief analysis\",\"key_moment\":\"quote\"}
-    ],
-    \"language_patterns\": [{\"phrase\":\"exact phrase used\",\"count\":0,\"context\":\"what it reveals\"}],
-    \"chart_data\": {
-        \"persona_resistance\":{\"boss\":0,\"uncle\":0,\"investor\":0,\"coworker\":0,\"guilt_tripper\":0},
-        \"stress_resistance_index\":0,
-        \"psych_profile\":{\"defensiveness\":0,\"adaptability\":0,\"anxiety\":0,\"logic_focus\":0,\"empathy\":0},
-        \"linguistic_profile\":{\"tone_control\":0,\"complexity\":0,\"assertiveness\":0,\"empathy\":0,\"formality\":0},
-        \"reaction_consistency\":{\"boss\":0,\"uncle\":0,\"investor\":0,\"coworker\":0,\"guilt_tripper\":0},
-        \"blind_spot_radar\":{\"awareness\":0,\"impact\":0,\"recurrence\":0},
-        \"trigger_radar\":{\"volatility\":0,\"frequency\":0,\"severity\":0}
+if ($isHR) {
+    $analysisPrompt = "You are a senior executive behavioral auditor. Analyze this professional interview transcript. Respond with ONLY valid JSON (no markdown). Keep all text fields under 100 words each. Reference actual candidate quotes.
+    
+    Candidate: " . ($session['candidate_name'] ?: 'Unknown') . "
+    
+    {
+        \"strongest_under\": \"Their core professional strength (logic, composure, etc.) — cite 1 specific quote\",
+        \"biggest_vulnerability\": \"Their primary behavioral risk or interview weakness — cite their weakest moment\",
+        \"blind_spot\": \"What subtext or professional cue they missed\",
+        \"pattern_summary\": \"3 recurring linguistic patterns or executive traits observed\",
+        \"emotional_tripwire\": \"The specific question that caused the most hesitation or defensiveness\",
+        \"recommendations\": [\"directive 1\",\"directive 2\",\"directive 3\",\"directive 4\"],
+        \"round_analyses\": [],
+        \"language_patterns\": [{\"phrase\":\"exact phrase used\",\"count\":0,\"context\":\"what it reveals\"}],
+        \"chart_data\": {
+            \"stress_resistance_index\": 0,
+            \"psych_profile\":{\"logic\":0,\"resilience\":0,\"professionalism\":0,\"empathy\":0,\"adaptability\":0},
+            \"vocal_stability\":{\"control\":0,\"cadence\":0,\"hesitation_ratio\":0},
+            \"stability_timeline\": [0,0,0,0,0,0,0,0],
+            \"latency_ms\": [0,0,0,0,0,0,0,0],
+            \"reaction_consistency\": [0,0,0,0]
+        }
     }
+    All scores 0-100 based on professional standards. Fill ALL numeric fields.";
+} else {
+    $analysisPrompt = "You are a communication psychologist. Analyze the transcript and respond with ONLY valid JSON (no markdown, no explanation). Keep all text fields under 100 words each. Be specific but concise. Reference actual quotes. Every audit must be unique — no two analyses should read the same.
+
+    Topic: {$topicDisplay}
+
+    {
+        \"strongest_under\": \"Which persona they handled best — cite 1 specific quote (1 short paragraph)\",
+        \"biggest_vulnerability\": \"Their primary weakness — cite their weakest moment (1 short paragraph)\",
+        \"blind_spot\": \"What emotional cue or subtext they missed — specify round and AI quote\",
+        \"pattern_summary\": \"3 recurring linguistic patterns with exact phrases quoted\",
+        \"emotional_tripwire\": \"The exact AI sentence that triggered them and their response\",
+        \"recommendations\": [\"directive 1\",\"directive 2\",\"directive 3\",\"directive 4\"],
+        \"round_analyses\": [
+            {\"round\":1,\"personality\":\"Boss\",\"performance\":\"brief analysis\",\"key_moment\":\"quote\"},
+            {\"round\":2,\"personality\":\"Uncle\",\"performance\":\"brief analysis\",\"key_moment\":\"quote\"},
+            {\"round\":3,\"personality\":\"Investor\",\"performance\":\"brief analysis\",\"key_moment\":\"quote\"},
+            {\"round\":4,\"personality\":\"Coworker\",\"performance\":\"brief analysis\",\"key_moment\":\"quote\"},
+            {\"round\":5,\"personality\":\"Guilt-Tripper\",\"performance\":\"brief analysis\",\"key_moment\":\"quote\"}
+        ],
+        \"language_patterns\": [{\"phrase\":\"exact phrase used\",\"count\":0,\"context\":\"what it reveals\"}],
+        \"chart_data\": {
+            \"persona_resistance\":{\"boss\":0,\"uncle\":0,\"investor\":0,\"coworker\":0,\"guilt_tripper\":0},
+            \"stress_resistance_index\":0,
+            \"psych_profile\":{\"defensiveness\":0,\"adaptability\":0,\"anxiety\":0,\"logic_focus\":0,\"empathy\":0},
+            \"linguistic_profile\":{\"tone_control\":0,\"complexity\":0,\"assertiveness\":0,\"empathy\":0,\"formality\":0},
+            \"reaction_consistency\":{\"boss\":0,\"uncle\":0,\"investor\":0,\"coworker\":0,\"guilt_tripper\":0},
+            \"blind_spot_radar\":{\"awareness\":0,\"impact\":0,\"recurrence\":0},
+            \"trigger_radar\":{\"volatility\":0,\"frequency\":0,\"severity\":0}
+        }
+    }
+    All scores 0-100 based on actual conversation performance. Fill ALL numeric fields.";
 }
-All scores 0-100 based on actual conversation performance. Fill ALL numeric fields.";
 
 // Send to Gemini Pro for analysis
 $aiResponse = sendAnalysisToGemini($analysisPrompt, $formattedTranscript);

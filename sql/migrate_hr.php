@@ -14,12 +14,15 @@ function run_migration() {
 
         echo "Starting HR Module Migration...\n";
 
-        // 1. Add mode to sessions if not exists
+        // 1. Add mode and candidate_name to sessions if not exists
         echo "Updating 'sessions' table...\n";
         $pdo->exec("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS mode ENUM('standard', 'hr') DEFAULT 'standard' AFTER custom_topic");
+        $pdo->exec("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS candidate_name VARCHAR(255) NULL AFTER mode");
 
         // 2. Create/Seed hr_questions
         echo "Recreating 'hr_questions' table...\n";
+        // Drop FK constraint first so we can recreate the table
+        try { $pdo->exec("ALTER TABLE rounds DROP FOREIGN KEY fk_hr_question"); } catch (Exception $e) { /* may not exist */ }
         $pdo->exec("DROP TABLE IF EXISTS hr_questions");
         $pdo->exec("CREATE TABLE hr_questions (
             id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

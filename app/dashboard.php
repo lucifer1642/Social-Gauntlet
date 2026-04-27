@@ -7,6 +7,8 @@ requireAuth();
 
 $user = getCurrentUser();
 $sessions = getUserSessions($user['id']);
+$hrSessions = array_filter($sessions, fn($s) => ($s['mode'] ?? '') === 'hr');
+$standardSessions = array_filter($sessions, fn($s) => ($s['mode'] ?? '') !== 'hr');
 $completed = count(array_filter($sessions, fn($s) => $s['status'] === 'completed'));
 
 $pageTitle = "Candidate Dashboard";
@@ -54,8 +56,33 @@ include __DIR__ . '/../includes/header.php';
                         <a href="<?= BASE_URL ?>/app/select-topic.php" class="text-accent mt-4 d-inline-block">Start First Session →</a>
                     </div>
                 <?php else: ?>
+                    <?php if (!empty($hrSessions)): ?>
+                    <div class="section-subheader mb-4 mt-2"><h3 class="text-accent uppercase text-sm tracking-widest font-mono border-b border-white/5 pb-2">Professional HR Audits</h3></div>
+                    <div class="sessions-list mb-8">
+                        <?php foreach ($hrSessions as $s): ?>
+                            <div class="session-item" data-session-id="<?= $s['id'] ?>" data-status="<?= $s['status'] ?>">
+                                <div class="session-main">
+                                    <div class="session-topic"><?= htmlspecialchars(getTopicTitle($s['topic'], $s['custom_topic'])) ?></div>
+                                    <div class="session-meta text-tertiary"><?= date('M j, Y — g:i A', strtotime($s['started_at'])) ?></div>
+                                </div>
+                                <div class="session-actions" style="display:flex; align-items:center;">
+                                    <span class="badge badge-<?= $s['status'] ?> status-badge mr-4"><?= strtoupper($s['status']) ?></span>
+                                    <?php if ($s['status'] === 'completed'): ?>
+                                        <a href="<?= BASE_URL ?>/app/hr-report-rich.php?session_id=<?= $s['id'] ?>" class="btn-text">HR Audit ➔</a>
+                                    <?php else: ?>
+                                        <a href="<?= BASE_URL ?>/app/hr-session.php?session_id=<?= $s['id'] ?>" class="btn btn-primary btn-sm">Resume HR</a>
+                                    <?php endif; ?>
+                                    <button class="btn-text ml-4 text-secondary hover-text-danger" style="background:transparent;border:none;cursor:pointer;font-size:0.8rem;transition:color 0.2s;" onclick="deleteSession(<?= $s['id'] ?>, this)" title="Delete Session">✕</button>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <?php endif; ?>
+
+                    <?php if (!empty($standardSessions)): ?>
+                    <div class="section-subheader mb-4"><h3 class="text-secondary uppercase text-sm tracking-widest font-mono border-b border-white/5 pb-2">Standard Behavioral Trials</h3></div>
                     <div class="sessions-list">
-                        <?php foreach ($sessions as $s): ?>
+                        <?php foreach ($standardSessions as $s): ?>
                             <div class="session-item" data-session-id="<?= $s['id'] ?>" data-status="<?= $s['status'] ?>">
                                 <div class="session-main">
                                     <div class="session-topic"><?= htmlspecialchars(getTopicTitle($s['topic'], $s['custom_topic'])) ?></div>
@@ -73,6 +100,7 @@ include __DIR__ . '/../includes/header.php';
                             </div>
                         <?php endforeach; ?>
                     </div>
+                    <?php endif; ?>
                 <?php endif; ?>
             </div>
         </section>
@@ -126,31 +154,32 @@ include __DIR__ . '/../includes/header.php';
         syncLabel.textContent = 'Syncing...';
         syncLabel.style.opacity = '1';
 
-        // Check if there are any non-completed sessions
-        const activeSessions = document.querySelectorAll('.session-item[data-status!="completed"]');
-        if (activeSessions.length === 0) {
-            syncLabel.textContent = 'Standby';
-            setTimeout(() => syncLabel.style.opacity = '0.5', 1000);
-            return;
-        }
+        fetch(window.location.href)
+            .then(res => res.text())
+            .then(html => {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                
+                const newSessions = doc.getElementById('sessionsContainer');
+                if (newSessions) {
+                    document.getElementById('sessionsContainer').innerHTML = newSessions.innerHTML;
+                }
+                
+                const newStats = doc.querySelector('.data-audit-bar');
+                if (newStats) {
+                    document.querySelector('.data-audit-bar').innerHTML = newStats.innerHTML;
+                }
 
-        // Just a simple visual refresh for now, but could be AJAX
-        // To make it truly dynamic without full refresh:
-        /*
-        fetch('api/get-user-sessions.php')
-            .then(r => r.json())
-            .then(data => { updateUI(data); });
-        */
-        
-        // For demonstration, we'll refresh if something changed (simulated check)
-        // Let's at least make the status badges pulse if active
-        activeSessions.forEach(el => {
-            el.querySelector('.status-badge').classList.add('pulse');
-        });
-
-        setTimeout(() => {
-            syncLabel.textContent = 'Syncing active...';
-        }, 1500);
+                syncLabel.textContent = 'Synced';
+                setTimeout(() => {
+                    syncLabel.textContent = 'Syncing active...';
+                    syncLabel.style.opacity = '0.5';
+                }, 1000);
+            })
+            .catch(err => {
+                syncLabel.textContent = 'Sync failed';
+                console.error(err);
+            });
     }
 
     setInterval(syncDashboard, 5000);

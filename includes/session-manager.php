@@ -7,21 +7,49 @@
 require_once __DIR__ . '/db.php';
 
 /**
- * Create a new stress test session with 5 rounds
+ * Create a new session.
+ * - standard mode: scenario-based text rounds
+ * - hr mode: voice interview rounds mapped to hr_questions
  */
-function createSession($userId, $topic, $customTopic = null) {
+function createSession($userId, $topic, $customTopic = null, $mode = 'standard', $candidateName = null) {
     $db = getDB();
-    
+
     // Insert session
-    $stmt = $db->prepare('INSERT INTO sessions (user_id, topic, custom_topic) VALUES (?, ?, ?)');
-    $stmt->execute([$userId, $topic, $customTopic]);
-    $sessionId = $db->lastInsertId();
-    
-    // Create all 5 rounds (personalities 1-5)
-    $stmt = $db->prepare('INSERT INTO rounds (session_id, round_number, personality_id) VALUES (?, ?, ?)');
-    for ($i = 1; $i <= TOTAL_ROUNDS; $i++) {
-        $stmt->execute([$sessionId, $i, $i]);
+    try {
+        $stmt = $db->prepare('INSERT INTO sessions (user_id, topic, custom_topic, mode, candidate_name) VALUES (?, ?, ?, ?, ?)');
+        $stmt->execute([$userId, $topic, $customTopic, $mode, $candidateName]);
+    } catch (Throwable $e) {
+        // If HR columns don't exist, try without them (standard mode only)
+        if ($mode === 'standard') {
+            $stmt = $db->prepare('INSERT INTO sessions (user_id, topic, custom_topic) VALUES (?, ?, ?)');
+            $stmt->execute([$userId, $topic, $customTopic]);
+        } else {
+            // HR mode REQUIRES these columns — run sql/migrate_hr.php first
+            error_log("HR session creation failed: " . $e->getMessage());
+            throw $e;
+        }
     }
+    $sessionId = $db->lastInsertId();
+
+    if ($mode === 'hr') {
+        // HR mode gets a short interview (6-8 questions) sampled from the bank.
+        $questionRows = $db->query('SELECT id FROM hr_questions ORDER BY RAND()')->fetchAll();
+        $targetQuestions = random_int(6, 8);
+        $selected = array_slice($questionRows, 0, $targetQuestions);
+        $stmt = $db->prepare('INSERT INTO rounds (session_id, round_number, personality_id, hr_question_id) VALUES (?, ?, ?, ?)');
+        $roundNumber = 1;
+        foreach ($selected as $row) {
+            $stmt->execute([$sessionId, $roundNumber, 6, intval($row['id'])]);
+            $roundNumber++;
+        }
+    } else {
+        // Standard scenario module rounds.
+        $stmt = $db->prepare('INSERT INTO rounds (session_id, round_number, personality_id) VALUES (?, ?, ?)');
+        for ($i = 1; $i <= TOTAL_ROUNDS; $i++) {
+            $stmt->execute([$sessionId, $i, $i]);
+        }
+    }
+
     return $sessionId;
 }
 
@@ -121,7 +149,11 @@ function completeRound($sessionId, $roundId) {
     $stmt->execute([$sessionId]);
     $session = $stmt->fetch();
     
-    if ($session['current_round'] < TOTAL_ROUNDS) {
+    $stmt = $db->prepare('SELECT COUNT(*) AS total_rounds FROM rounds WHERE session_id = ?');
+    $stmt->execute([$sessionId]);
+    $totalRounds = intval($stmt->fetch()['total_rounds'] ?? 0);
+
+    if ($session['current_round'] < $totalRounds) {
         // Advance to next round
         $stmt = $db->prepare('UPDATE sessions SET current_round = current_round + 1 WHERE id = ?');
         $stmt->execute([$sessionId]);

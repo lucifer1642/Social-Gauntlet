@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $mode = 'hr';
         
         $sessionId = createSession($user['id'], $topicSlug, $customTopic, $mode, $candidateName);
-        header('Location: ' . BASE_URL . '/app/session.php?session_id=' . $sessionId);
+        header('Location: ' . BASE_URL . '/app/hr-session.php?session_id=' . $sessionId);
         exit;
     }
 }
@@ -70,7 +70,7 @@ include __DIR__ . '/../includes/header.php';
             <div class="text-center mb-9">
                 <div class="badge-label mb-4" style="background: rgba(20, 184, 166, 0.1); color: var(--accent);">EXECUTIVE PERFORMANCE AUDIT</div>
                 <h1 class="text-3xl font-bold mb-3 tracking-tight">Begin Behavioral <span class="text-accent">Audit</span></h1>
-                <p class="text-secondary text-sm leading-relaxed">Establish your professional record. This is a 7-8 question voice-only sequence designed to evaluate logic and resilience.</p>
+                <p class="text-secondary text-sm leading-relaxed">Establish your professional record. This is a voice-only interview with 6 to 8 adaptive HR questions.</p>
             </div>
 
             <div class="wave-container">
@@ -89,7 +89,7 @@ include __DIR__ . '/../includes/header.php';
 
                 <div class="audit-specs mb-10 grid grid-cols-2 gap-4">
                     <div class="spec-item p-4 glass-subtle rounded-xl text-center border-white/5 border">
-                        <span class="text-accent font-mono text-lg block mb-1">8</span>
+                        <span class="text-accent font-mono text-lg block mb-1">6-8</span>
                         <span class="text-[9px] font-mono text-tertiary uppercase tracking-widest">Questions</span>
                     </div>
                     <div class="spec-item p-4 glass-subtle rounded-xl text-center border-white/5 border">
@@ -98,7 +98,7 @@ include __DIR__ . '/../includes/header.php';
                     </div>
                 </div>
 
-                <button type="submit" class="btn btn-primary btn-lg w-full py-5 rounded-xl shadow-xl shadow-accent/10" id="startBtn">Synchronize and Start Audit →</button>
+                <button type="submit" class="btn btn-primary btn-lg w-full py-5 rounded-xl shadow-xl shadow-accent/10" id="startBtn">Start HR Voice Interview →</button>
             </form>
 
             <div class="mt-8 text-center">
@@ -111,7 +111,7 @@ include __DIR__ . '/../includes/header.php';
 <script>
 document.getElementById('hrForm').addEventListener('submit', function() {
     const btn = document.getElementById('startBtn');
-    btn.disabled = true; btn.textContent = 'Calibrating Neural Link...';
+    btn.disabled = true; btn.textContent = 'Preparing Interview...';
 });
 </script>
 

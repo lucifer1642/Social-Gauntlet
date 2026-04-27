@@ -1,15 +1,16 @@
 .dashboard-wrapper {
-    padding: 60px 24px;
-    background: #000;
+    padding: 64px 24px;
+    background: radial-gradient(circle at top, rgba(14,165,233,0.08), #000 45%);
 }
 
 .audit-pane {
     max-width: 1000px;
     margin: 0 auto;
     padding: 64px;
-    background: #000;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
+    background: rgba(0,0,0,0.85);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.5);
 }
 
 .dash-audit-header {
@@ -71,8 +72,13 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 20px 0;
+    padding: 22px 0;
     border-bottom: 1px solid var(--border-subtle);
+    transition: background 0.2s ease;
+}
+
+.session-item:hover {
+    background: rgba(255,255,255,0.02);
 }
 
 .session-topic {

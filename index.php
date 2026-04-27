@@ -9,11 +9,11 @@ include __DIR__ . '/includes/header.php';
 ?>
     <!-- ====== HERO — Full viewport ====== -->
     <section class="hero" id="hero">
-        <div class="hero-gradient"></div>
+        <div class="hero-gradient parallax-layer" data-parallax-speed="0.18"></div>
         <div class="hero-content">
             <div class="badge-label mb-5">⚡ AI-POWERED COMMUNICATION STRESS TEST</div>
-            <h1 class="hero-title">How Do You Break<br>Under <span class="text-accent">Pressure?</span></h1>
-            <p class="hero-subtitle">Most people think they communicate well — until they're tested.<br>Choose your arena: face 5 AI personalities in text, or survive a live voice HR interrogation.</p>
+            <h1 class="hero-title text-reveal" data-reveal-text>How Do You Break<br>Under <span class="text-accent">Pressure?</span></h1>
+            <p class="hero-subtitle text-reveal" data-reveal-text>Most people think they communicate well — until they're tested.<br>Choose your arena: face 5 AI personalities in text, or survive a live voice HR interrogation.</p>
             <div class="hero-ctas">
                 <a href="#choose-module" class="btn btn-primary btn-lg">Choose Your Arena →</a>
                 <a href="#how-it-works" class="btn btn-ghost btn-lg">See How It Works</a>
@@ -26,7 +26,7 @@ include __DIR__ . '/includes/header.php';
         <div class="container">
             <div class="text-center mb-7">
                 <div class="badge-label mb-3">SELECT YOUR TRIAL</div>
-                <h2>Two Arenas. One Goal: <span class="text-accent">Break You.</span></h2>
+                <h2 class="text-reveal" data-reveal-text>Two Arenas. One Goal: <span class="text-accent">Break You.</span></h2>
                 <p class="text-secondary mt-2">Each module tests a different dimension of your communication ability.</p>
             </div>
 
@@ -105,7 +105,7 @@ include __DIR__ . '/includes/header.php';
                     <!-- Live pulse indicator -->
                     <div class="voice-pulse-row">
                         <span class="voice-dot"></span>
-                        <span class="voice-label">Gemini Live — Powered by Google</span>
+                        <span class="voice-label">Neural Voice Engine — High Fidelity AI</span>
                     </div>
                 </div>
             </div>
@@ -117,7 +117,7 @@ include __DIR__ . '/includes/header.php';
         <div class="container">
             <div class="text-center mb-7">
                 <div class="badge-label mb-3">THE PROCESS</div>
-                <h2>Three Steps. No Hiding.</h2>
+                <h2 class="text-reveal" data-reveal-text>Three Steps. No Hiding.</h2>
             </div>
             <div class="steps-grid">
                 <div class="step-card glass reveal-up stagger-1">
@@ -144,7 +144,7 @@ include __DIR__ . '/includes/header.php';
         <div class="container">
             <div class="text-center mb-7">
                 <div class="badge-label mb-3">TEXT GAUNTLET — YOUR OPPONENTS</div>
-                <h2>The 5 Personalities You Will Face</h2>
+                <h2 class="text-reveal" data-reveal-text>The 5 Personalities You Will Face</h2>
                 <p class="text-secondary mt-2">Each one probes a different psychological vulnerability.</p>
             </div>
             <div class="personas-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px;">
@@ -181,8 +181,8 @@ include __DIR__ . '/includes/header.php';
     <section class="hr-spotlight-section" id="hr-spotlight">
         <div class="container">
             <div class="text-center mb-7">
-                <div class="badge-label badge-label-voice mb-3">🎙️ VOICE MODULE — POWERED BY GEMINI LIVE</div>
-                <h2>The HR Behavioral Audit</h2>
+                <div class="badge-label badge-label-voice mb-3">🎙️ VOICE MODULE — NEURAL AUDIT ENGINE</div>
+                <h2 class="text-reveal" data-reveal-text>The HR Behavioral Audit</h2>
                 <p class="text-secondary mt-2">A standalone voice-first professional interview simulation.</p>
             </div>
             <div class="hr-features-grid">
@@ -229,6 +229,57 @@ include __DIR__ . '/includes/header.php';
     }, { rootMargin: '0px 0px -50px 0px' });
 
     document.querySelectorAll('.reveal-up, .reveal-scale').forEach(el => observer.observe(el));
+
+    // Text reveal animation
+    const revealTargets = document.querySelectorAll('[data-reveal-text]');
+    revealTargets.forEach((el) => {
+        if (el.dataset.revealProcessed === '1') return;
+        const source = el.innerHTML;
+        // Skip wrapping when element contains HTML tags (e.g., <span class="text-accent">),
+        // otherwise tag markup can leak into visible text.
+        if (/<[a-z][\s\S]*>/i.test(source)) {
+            el.dataset.revealProcessed = '1';
+            return;
+        }
+        const tokens = source.split(/(<br\s*\/?>|\s+)/i).filter(Boolean);
+        const wrapped = tokens.map((token) => {
+            if (/^<br\s*\/?>$/i.test(token)) return token;
+            if (/^\s+$/.test(token)) return token;
+            return `<span class="reveal-word">${token}</span>`;
+        }).join('');
+        el.innerHTML = wrapped;
+        el.dataset.revealProcessed = '1';
+    });
+
+    const textObserver = new IntersectionObserver((entries, obs) => {
+        entries.forEach((entry) => {
+            if (!entry.isIntersecting) return;
+            entry.target.classList.add('text-reveal-visible');
+            obs.unobserve(entry.target);
+        });
+    }, { threshold: 0.22 });
+    revealTargets.forEach((el) => textObserver.observe(el));
+
+    // Parallax scroll layers
+    const parallaxLayers = document.querySelectorAll('[data-parallax-speed]');
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!reduceMotion && parallaxLayers.length) {
+        let ticking = false;
+        const applyParallax = () => {
+            const y = window.scrollY || window.pageYOffset;
+            parallaxLayers.forEach((layer) => {
+                const speed = parseFloat(layer.getAttribute('data-parallax-speed') || '0.1');
+                layer.style.transform = `translate3d(0, ${Math.round(y * speed)}px, 0)`;
+            });
+            ticking = false;
+        };
+        window.addEventListener('scroll', () => {
+            if (ticking) return;
+            window.requestAnimationFrame(applyParallax);
+            ticking = true;
+        }, { passive: true });
+        applyParallax();
+    }
 
     // Fix BFCache visibility bug & replay title animation
     window.addEventListener('pageshow', function(e) {

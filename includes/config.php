@@ -33,8 +33,9 @@ define('GEMINI_API_KEY', $_ENV['GEMINI_API_KEY'] ?? '');
 define('GEMINI_MODEL_ANALYSIS', 'gemini-2.0-flash');
 define('GEMINI_API_URL', 'https://generativelanguage.googleapis.com/v1beta/models/');
 
-// AI API — Voice / Gemini Live (separate key with Google Assistant enabled)
-define('GEMINI_VOICE_API_KEY', $_ENV['GEMINI_VOICE_API_KEY'] ?? '');
+// AI API — Voice / ElevenLabs (Neural Engine)
+define('ELEVENLABS_API_KEY', $_ENV['ELEVENLABS_API_KEY'] ?? '');
+define('ELEVENLABS_AGENT_ID', $_ENV['ELEVENLABS_AGENT_ID'] ?? 'agent_2801kq1dx0wkej2rjmgysyjtq9zf');
 
 // App constants
 define('APP_NAME', 'The Social Gauntlet');

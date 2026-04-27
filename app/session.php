@@ -11,12 +11,12 @@ $sessionId = intval($_GET['session_id'] ?? 0);
 if (!$sessionId) { header('Location: ' . BASE_URL . '/app/select-topic.php'); exit; }
 $session = getSession($sessionId, $user['id']);
 if (!$session) { header('Location: ' . BASE_URL . '/app/dashboard.php'); exit; }
+if (($session['mode'] ?? 'standard') === 'hr') {
+    header('Location: ' . BASE_URL . '/app/hr-session.php?session_id=' . $sessionId);
+    exit;
+}
 if ($session['status'] === 'completed') {
-    if ($session['mode'] === 'hr') {
-        header('Location: ' . BASE_URL . '/app/hr-report-rich.php?session_id=' . $sessionId);
-    } else {
-        header('Location: ' . BASE_URL . '/app/report.php?session_id=' . $sessionId);
-    }
+    header('Location: ' . BASE_URL . '/app/report.php?session_id=' . $sessionId);
     exit;
 }
 
@@ -267,114 +267,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// ==== HR LIVE VOICE INITIALIZATION (no rounds, predefined questions in system prompt) ====
-function initHRVoice() {
-    const apiKey = '<?= GEMINI_VOICE_API_KEY ?>';
-    
-    // Override the system instruction to include predefined questions
-    hrEngine = new HRLiveEngine(apiKey, SESSION_ID, CANDIDATE_NAME);
-    
-    // Inject predefined questions into the engine's system instruction
-    hrEngine._buildSystemInstruction = function() {
-        const now = new Date();
-        const hour = now.getHours();
-        let greeting;
-        if (hour < 12) greeting = 'Good Morning';
-        else if (hour < 17) greeting = 'Good Afternoon';
-        else greeting = 'Good Evening';
-
-        const questions = <?= json_encode(array_map(function($q) {
-            return $q['question'];
-        }, $hrQuestionsList)) ?>;
-
-        let questionBlock = '';
-        questions.forEach((q, i) => {
-            questionBlock += `\nQuestion ${i + 1}: ${q}`;
-        });
-
-        return `You are a highly professional and stern HR Recruiter conducting a formal behavioral interview.
-
-IMPORTANT — YOU MUST START THE CONVERSATION. When the session begins, you do the following IN ORDER:
-1. Greet the candidate by name using "${greeting}, ${this.candidateName}."
-2. Introduce yourself briefly as the interviewer for today's session.
-3. Explain the interview rules clearly:
-   - This is a structured behavioral interview with ${questions.length} questions.
-   - Answer each question thoroughly and honestly.
-   - Responses are evaluated on clarity, depth, professionalism, and logical consistency.
-   - Take a moment to think before answering if needed.
-   - There are no right or wrong answers, but vague or evasive responses will be challenged.
-4. Then ask the FIRST question immediately.
-
-YOUR PREDEFINED QUESTIONS (ask them in this exact order):
-${questionBlock}
-
-INTERVIEW CONDUCT RULES:
-- Ask ONE question at a time from the list above, then wait for the candidate to answer.
-- After they answer, you may ask a brief follow-up, then move to the next question in the list.
-- Do NOT skip questions. Do NOT make up new questions. Only use the ${questions.length} questions listed above.
-- After all ${questions.length} questions, formally conclude the interview.
-- Address the candidate by name (${this.candidateName}) periodically.
-- Be professional, composed, and slightly cold. No warm encouragement or filler praise.
-- If vague answers are given, challenge them: "Could you be more specific?" or "Give a concrete example."
-- When concluding, thank the candidate formally and state that the audit is complete.
-
-YOUR VOICE: Speak clearly and at a measured pace. You are a senior HR professional. Sound authoritative but not hostile.`;
-    };
-    
-    hrEngine.onStatus = (msg) => {
-        const statusEl = document.getElementById('voiceStatus');
-        const visualizer = document.querySelector('.google-live-visualizer');
-        if (statusEl) statusEl.textContent = msg;
-        
-        if (msg.includes('Established')) {
-            const telemetry = document.getElementById('liveTelemetry');
-            if (telemetry) telemetry.style.display = 'grid';
-            if (statusEl) { statusEl.classList.remove('text-accent'); statusEl.classList.add('text-primary'); }
-            if (visualizer) visualizer.style.filter = 'none';
-        }
-        if (msg.includes('Speaking')) {
-            if (visualizer) visualizer.classList.add('ai-speaking');
-        }
-        if (msg.includes('Listening')) {
-            if (visualizer) visualizer.classList.remove('ai-speaking');
-        }
-        if (msg.includes('Interrupted')) {
-            if (visualizer) {
-                visualizer.style.filter = 'hue-rotate(120deg) saturate(1.5)';
-                setTimeout(() => visualizer.style.filter = 'none', 1000);
-            }
-        }
-    };
-    
-    hrEngine.onMessage = (role, text) => {
-        if (role === 'assistant') {
-            typewriterBubble('ai', text);
-            if (text.toLowerCase().includes('conclude') || text.toLowerCase().includes('complete') || text.toLowerCase().includes('thank you for your time')) {
-                // Mark session completed and redirect to report
-                setTimeout(() => {
-                    fetch(BASE + '/api/end-round.php', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ session_id: SESSION_ID, force_complete: true })
-                    }).then(() => {
-                        window.location.href = BASE + '/app/hr-report-rich.php?session_id=' + SESSION_ID;
-                    });
-                }, 3000);
-            }
-        }
-    };
-    
-    hrEngine.onTurnComplete = () => {
-        const latencyEl = document.getElementById('valLatency');
-        const pauseEl = document.getElementById('valPauses');
-        if (latencyEl && hrEngine.metrics.questionCount > 0) {
-            latencyEl.textContent = 'Q' + hrEngine.metrics.questionCount + ' / <?= count($hrQuestionsList) ?>';
-        }
-        if (pauseEl) pauseEl.textContent = 'Active';
-    };
-    
-    hrEngine.init();
-}
+// Note: HR Live Voice is now handled by app/hr-session.php using ElevenLabs SDK
 
 // ---- TEXT MODE FUNCTIONS ----
 function loadRound() {

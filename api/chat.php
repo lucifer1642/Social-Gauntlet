@@ -43,6 +43,10 @@ if (!$session) {
     echo json_encode(['error' => 'Session not found']);
     exit;
 }
+if (($session['mode'] ?? 'standard') === 'hr') {
+    echo json_encode(['error' => 'HR module uses dedicated voice APIs only']);
+    exit;
+}
 
 if ($session['status'] !== 'active') {
     echo json_encode(['error' => 'Session is not active']);

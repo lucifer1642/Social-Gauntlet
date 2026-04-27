@@ -17,6 +17,54 @@ if (!$session || $session['mode'] !== 'hr') {
 $report = getReport($sessionId);
 $transcript = getFullTranscript($sessionId);
 $analysis = $report ? json_decode($report['analysis_json'], true) : null;
+$mockPreviewUsernames = ['test user2'];
+$mockPreviewEmails = ['xyz@xyz.com'];
+$currentUsername = strtolower(trim($user['username'] ?? ''));
+$currentEmail = strtolower(trim($user['email'] ?? ''));
+$isMockPreviewUser = in_array($currentUsername, $mockPreviewUsernames, true) || in_array($currentEmail, $mockPreviewEmails, true);
+$forceMock = $isMockPreviewUser && isset($_GET['mock']) && $_GET['mock'] === '1';
+$useMock = $isMockPreviewUser && ($forceMock || !$report || !$analysis || !isset($analysis['chart_data']));
+
+if ($useMock) {
+    $analysis = [
+        'chart_data' => [
+            'stress_resistance_index' => 78.4,
+            'psych_profile' => [
+                'logic' => 82.6,
+                'resilience' => 74.9,
+                'professionalism' => 80.3,
+                'empathy' => 68.7,
+                'adaptability' => 76.5
+            ],
+            'vocal_stability' => [
+                'control' => 71.8,
+                'cadence' => 66.4,
+                'hesitation_ratio' => 39.2
+            ],
+            'stability_timeline' => [74.2, 76.1, 72.8, 79.5, 81.4, 77.9, 80.2, 78.7],
+            'latency_ms' => [1280, 1425, 1190, 1360, 1480, 1310, 1265, 1405]
+        ],
+        'reaction_consistency' => [78.5, 84.2, 69.6, 72.4]
+    ];
+
+    if (!$report) {
+        $report = [
+            'strongest_under' => 'Structured reasoning and calm response framing under pressure.',
+            'biggest_vulnerability' => 'Answer precision drops when asked for measurable impact.',
+            'pattern_summary' => 'Candidate demonstrates consistent executive tone with strong composure across escalating prompts. Performance is strongest when framing decisions logically, but examples become less concrete under follow-up challenge. Vocal control remains stable, with moderate latency spikes during metric-driven questions.',
+            'analysis_json' => json_encode($analysis)
+        ];
+    }
+
+    if (empty($transcript)) {
+        $transcript = [
+            ['role' => 'assistant', 'content' => 'Good afternoon. Tell me about yourself in a professional context.', 'created_at' => date('Y-m-d H:i:s')],
+            ['role' => 'user', 'content' => 'I am a software engineer with 3 years of experience in full-stack development, mostly in PHP and JavaScript.', 'created_at' => date('Y-m-d H:i:s')],
+            ['role' => 'assistant', 'content' => 'Describe a high-pressure project and your role in resolving it.', 'created_at' => date('Y-m-d H:i:s')],
+            ['role' => 'user', 'content' => 'We had a release rollback issue. I coordinated triage, aligned stakeholders, and delivered a safe patch within two hours.', 'created_at' => date('Y-m-d H:i:s')]
+        ];
+    }
+}
 
 $pageTitle = "Executive HR Audit Result";
 $extraCss = ['report.css'];
@@ -39,7 +87,8 @@ include __DIR__ . '/../includes/header.php';
             </div>
         </header>
 
-        <?php if (!$report): ?>
+
+        <?php if (!$useMock && !$report): ?>
             <div class="glass p-9 text-center">
                 <h3 class="mb-4">Synthesizing Executive Audit...</h3>
                 <p class="text-secondary">Our behavioral engine is crunching your vocal metrics and response patterns. This takes about 15-20 seconds.</p>
@@ -145,8 +194,8 @@ include __DIR__ . '/../includes/header.php';
         }
     });
 
-    // 2. Stability Timeline (Generated pseudo-scatter for visual depth)
-    const stabilityPoints = Array.from({length: 8}, () => Math.floor(Math.random() * 20) + 70);
+    // 2. Stability Timeline
+    const stabilityPoints = auditData.stability_timeline || [74, 76, 73, 79, 81, 78, 80, 79];
     new Chart(document.getElementById('stabilityChart'), {
         type: 'line',
         data: {
@@ -170,21 +219,21 @@ include __DIR__ . '/../includes/header.php';
     });
 
     // 3. Latency Chart
-    const latencyData = <?= json_encode(array_values($analysis['reaction_consistency'] ?? [40, 60, 50, 70])) ?>;
+    const latencyData = auditData.latency_ms || [1280, 1425, 1190, 1360, 1480, 1310, 1265, 1405];
     new Chart(document.getElementById('latencyChart'), {
         type: 'bar',
         data: {
-            labels: ['Avg', 'Max', 'Min', 'Stress'],
+            labels: ['Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Q8'],
             datasets: [{
-                data: [auditData.vocal_stability.control, auditData.vocal_stability.cadence, auditData.vocal_stability.hesitation_ratio, 45],
-                backgroundColor: ['#c084fc', '#a855f7', '#d8b4fe', '#8b5cf6'],
+                data: latencyData,
+                backgroundColor: ['#c084fc', '#a855f7', '#d8b4fe', '#8b5cf6', '#c084fc', '#a855f7', '#d8b4fe', '#8b5cf6'],
                 borderRadius: 4
             }]
         },
         options: {
             scales: {
                 x: { display: false },
-                y: { display: false, min: 0, max: 100 }
+                y: { display: false, min: 0, max: 2500 }
             },
             plugins: { legend: { display: false } }
         }
