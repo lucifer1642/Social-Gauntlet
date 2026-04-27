@@ -23,621 +23,378 @@ $candidateName = $session['candidate_name'] ?: $user['username'];
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HR Voice Interview — <?= APP_NAME ?></title>
-    <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/global.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: #020617; color: #e2e8f0; font-family: 'Inter', system-ui, sans-serif; }
-
-        .hr-wrap {
-            min-height: 100vh;
-            background-image: url('../img/backdrop.png');
-            background-size: cover;
-            background-position: center;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 24px;
-            position: relative;
-        }
-        .hr-wrap::before {
-            content: '';
-            position: absolute; inset: 0;
-            background: rgba(2,6,23,0.82);
-            z-index: 0;
-        }
-
-        .hr-card {
-            width: 100%; max-width: 720px;
-            background: rgba(15,23,42,0.7);
-            backdrop-filter: blur(24px);
-            border: 1px solid rgba(148,163,184,0.15);
-            border-radius: 28px;
-            padding: 40px 36px;
-            box-shadow: 0 30px 60px -12px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,255,255,0.04);
-            z-index: 1;
-            position: relative;
-        }
-
-        .hr-header {
-            text-align: center;
-            margin-bottom: 32px;
-            padding-bottom: 24px;
-            border-bottom: 1px solid rgba(148,163,184,0.1);
-        }
-        .hr-header .badge-label {
-            display: inline-block;
-            background: rgba(34,211,238,0.1);
-            color: #22d3ee;
-            padding: 6px 16px;
-            border-radius: 20px;
-            font-size: 10px;
-            font-family: monospace;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-            margin-bottom: 16px;
-        }
-        .hr-header h1 { font-size: 1.6rem; color: #f8fafc; margin-bottom: 6px; }
-        .hr-header h1 span { color: #22d3ee; }
-        .hr-header .sub { color: #94a3b8; font-size: 0.85rem; }
-        #questionProgress {
-            color: #38bdf8;
-            font-family: monospace;
-            font-size: 12px;
-            letter-spacing: 1px;
-            margin-top: 10px;
-        }
-
-        /* ---- Mic Button ---- */
-        .mic-area { text-align: center; margin-bottom: 28px; position: relative; }
-        .mic-btn {
-            width: 100px; height: 100px;
-            border-radius: 50%;
-            border: 2px solid rgba(56,189,248,0.4);
-            background: rgba(15,23,42,0.8);
-            color: #38bdf8;
-            font-size: 32px;
-            cursor: pointer;
-            position: relative;
-            z-index: 2;
-            transition: all 0.3s ease;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .mic-btn:hover { border-color: #38bdf8; box-shadow: 0 0 30px rgba(56,189,248,0.3); }
-        .mic-btn.listening {
-            border-color: #ef4444;
-            color: #fca5a5;
-            animation: mic-pulse 1.5s infinite;
-        }
-        @keyframes mic-pulse {
-            0% { box-shadow: 0 0 0 0 rgba(239,68,68,0.5); }
-            70% { box-shadow: 0 0 0 15px rgba(239,68,68,0); }
-            100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
-        }
-
-        .breathe-ring {
-            position: absolute;
-            top: 50%; left: 50%;
-            width: 130px; height: 130px;
-            margin: -65px 0 0 -65px;
-            border: 2px solid rgba(56,189,248,0.15);
-            border-radius: 50%;
-            z-index: 1;
-            transition: all 0.5s;
-        }
-        .breathe-ring.active {
-            animation: ring-expand 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
-            border-color: rgba(239,68,68,0.3);
-        }
-        @keyframes ring-expand {
-            0% { transform: scale(0.9); opacity: 0; }
-            50% { opacity: 1; }
-            100% { transform: scale(1.6); opacity: 0; }
-        }
-
-        #micStatus {
-            margin-top: 14px;
-            color: #94a3b8;
-            font-family: monospace;
-            font-size: 12px;
-            letter-spacing: 1.5px;
-            text-transform: uppercase;
-        }
-
-        /* ---- Transcript Boxes ---- */
-        .voice-box {
-            display: none;
-            padding: 16px 20px;
-            border-radius: 14px;
-            margin-bottom: 14px;
-            font-size: 0.95rem;
-            line-height: 1.6;
-            position: relative;
-        }
-        .voice-box .label {
-            font-size: 9px;
-            font-family: monospace;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-            margin-bottom: 8px;
-            display: block;
-        }
-        .voice-response {
-            background: linear-gradient(145deg, rgba(30,58,138,0.25), rgba(15,23,42,0.5));
-            border: 1px solid rgba(56,189,248,0.3);
-            color: #e0f2fe;
-        }
-        .voice-response .label { color: #38bdf8; }
-        .voice-transcript {
-            background: rgba(16,185,129,0.08);
-            border: 1px solid rgba(16,185,129,0.25);
-            color: #d1fae5;
-        }
-        .voice-transcript .label { color: #34d399; }
-
-        .replay-btn {
-            position: absolute;
-            top: 12px; right: 14px;
-            background: none;
-            border: 1px solid rgba(56,189,248,0.3);
-            color: #38bdf8;
-            font-size: 11px;
-            padding: 4px 10px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .replay-btn:hover { background: rgba(56,189,248,0.1); }
-
-        /* ---- Analysis Overlay ---- */
-        .analysis-overlay {
-            display: none;
-            position: fixed; inset: 0;
-            background: rgba(2,6,23,0.95);
-            z-index: 100;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 20px;
-        }
-        .analysis-overlay h2 { color: #22d3ee; font-size: 1.4rem; }
-        .analysis-overlay p { color: #94a3b8; font-size: 0.9rem; }
-        .spin-loader {
-            width: 56px; height: 56px;
-            border: 4px solid rgba(34,211,238,0.15);
-            border-top-color: #22d3ee;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HR Voice Interview — <?= APP_NAME ?></title>
+  <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/global.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    body{background:#020617;color:#e2e8f0;font-family:Inter,system-ui,sans-serif;margin:0}
+    .wrap{min-height:100vh;display:flex;justify-content:center;align-items:center;padding:20px}
+    .card{width:100%;max-width:920px;background:#0b1224;border:1px solid #1e293b;border-radius:22px;padding:24px}
+    .badge{display:inline-block;padding:8px 14px;border:1px solid #155e75;border-radius:999px;color:#22d3ee;font-size:12px}
+    h1{margin:14px 0 6px;font-size:42px}
+    h1 span{color:#22d3ee}
+    .sub{color:#94a3b8;font-size:30px}
+    .meta{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0}
+    .box{border:1px solid #1e293b;border-radius:14px;padding:14px}
+    .k{font-size:12px;color:#94a3b8;display:block}
+    .v{font-size:18px;font-weight:700;margin-top:4px;display:block}
+    .micZone{text-align:center;margin-top:16px}
+    .ring{width:160px;height:160px;border-radius:999px;border:2px solid #0c4a6e;margin:0 auto;display:flex;align-items:center;justify-content:center}
+    .ring.active{animation:pulse 1.4s infinite;border-color:#ef4444}
+    @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,.35)}70%{box-shadow:0 0 0 20px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}
+    .micBtn{width:118px;height:118px;border-radius:999px;border:2px solid #0ea5e9;background:#0f172a;color:#38bdf8;font-size:36px;cursor:pointer}
+    .micBtn.listening{border-color:#ef4444;color:#fca5a5}
+    #status{margin-top:12px;font-family:monospace;color:#94a3b8}
+    .panel{margin-top:14px;border:1px solid #1e293b;border-radius:12px;padding:12px;display:none}
+    .panel .lbl{font-size:11px;color:#38bdf8;margin-bottom:6px;display:block}
+    .panel.user .lbl{color:#34d399}
+    .debug{margin-top:12px;background:#020617;border:1px dashed #334155;border-radius:10px;padding:10px;color:#93c5fd;font-size:12px;white-space:pre-wrap;max-height:180px;overflow:auto}
+    .overlay{position:fixed;inset:0;background:rgba(2,6,23,.9);display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;z-index:9999}
+    .loader{width:50px;height:50px;border:4px solid #164e63;border-top-color:#22d3ee;border-radius:999px;animation:spin .8s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @media(max-width:900px){h1{font-size:30px}.sub{font-size:22px}.meta{grid-template-columns:1fr}}
+  </style>
 </head>
 <body>
-    <div class="hr-wrap">
-        <div class="hr-card">
-            <div class="hr-header">
-                <div class="badge-label">EXECUTIVE BEHAVIORAL AUDIT</div>
-                <h1>Candidate: <span><?= htmlspecialchars($candidateName) ?></span></h1>
-                <div class="sub">Voice-driven structured interview · 9 adaptive questions</div>
-                <div id="questionProgress">READY</div>
-            </div>
+<div class="wrap">
+  <div class="card">
+    <div class="badge">● EXECUTIVE BEHAVIORAL AUDIT</div>
+    <h1>Candidate: <span><?= htmlspecialchars($candidateName) ?></span></h1>
+    <div class="sub">Voice-driven structured interview · 9 adaptive questions · live turn-taking</div>
 
-            <!-- Agent Response -->
-            <div class="voice-box voice-response" id="voiceResponse">
-                <span class="label">AUDITOR</span>
-                <button class="replay-btn" id="replayBtn"><i class="fa-solid fa-rotate-right"></i> Replay</button>
-                <div id="responseText"></div>
-            </div>
-
-            <!-- User Transcript -->
-            <div class="voice-box voice-transcript" id="voiceTranscript">
-                <span class="label">CANDIDATE</span>
-                <div id="transcriptText"></div>
-            </div>
-
-            <!-- Mic Button -->
-            <div class="mic-area">
-                <div class="breathe-ring" id="breatheRing"></div>
-                <button class="mic-btn" id="micBtn">
-                    <i class="fa-solid fa-microphone" id="micIcon"></i>
-                </button>
-                <div id="micStatus">TAP TO BEGIN AUDIT</div>
-            </div>
-        </div>
+    <div class="meta">
+      <div class="box"><span class="k">SESSION ID</span><span class="v">#<?= (int)$sessionId ?></span></div>
+      <div class="box"><span class="k">MODE</span><span class="v">HR Voice Interview</span></div>
+      <div class="box"><span class="k">PROGRESS</span><span class="v" id="progress">READY</span></div>
     </div>
 
-    <!-- Analysis Overlay -->
-    <div class="analysis-overlay" id="analysisOverlay">
-        <div class="spin-loader"></div>
-        <h2>Synthesizing Audit Report...</h2>
-        <p>Analyzing behavioral patterns and vocal response metrics.</p>
+    <div id="assistantPanel" class="panel">
+      <span class="lbl">AUDITOR</span>
+      <div id="assistantText"></div>
     </div>
 
-<script type="module">
-document.addEventListener('DOMContentLoaded', function () {
-    const BASE = '<?= BASE_URL ?>';
-    const SESSION_ID = <?= $sessionId ?>;
-    const CANDIDATE_NAME = '<?= addslashes($candidateName) ?>';
+    <div id="userPanel" class="panel user">
+      <span class="lbl">CANDIDATE</span>
+      <div id="userText"></div>
+    </div>
 
-    const micBtn = document.getElementById('micBtn');
-    const micIcon = document.getElementById('micIcon');
-    const micStatus = document.getElementById('micStatus');
-    const breatheRing = document.getElementById('breatheRing');
-    const progressEl = document.getElementById('questionProgress');
+    <div class="micZone">
+      <div id="ring" class="ring">
+        <button id="micBtn" class="micBtn" aria-label="Start/Stop">
+          <i id="micIcon" class="fa-solid fa-microphone"></i>
+        </button>
+      </div>
+      <div id="status">TAP TO BEGIN AUDIT</div>
+    </div>
 
-    const transcriptWrap = document.getElementById('voiceTranscript');
-    const transcriptText = document.getElementById('transcriptText');
-    const responseWrap = document.getElementById('voiceResponse');
-    const responseText = document.getElementById('responseText');
-    const replayBtn = document.getElementById('replayBtn');
-    const analysisOverlay = document.getElementById('analysisOverlay');
+    <div id="debug" class="debug">Debug initialized.</div>
+  </div>
+</div>
 
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+<div id="overlay" class="overlay">
+  <div class="loader"></div>
+  <div style="color:#22d3ee;font-weight:700">Generating report...</div>
+</div>
 
-    // ---------- Config ----------
-    const TOTAL_QUESTIONS = 9;
-    const SILENCE_STOP_MS = 1800;
-    const NEXT_QUESTION_DELAY_MS = 8000;
+<script>
+(() => {
+  const BASE = '<?= BASE_URL ?>';
+  const SESSION_ID = <?= (int)$sessionId ?>;
+  const CANDIDATE_NAME = <?= json_encode($candidateName) ?>;
 
-    // ---------- State ----------
-    let running = false;
-    let flowState = 'IDLE';
-    let lastAssistantText = '';
-    let userName = 'Friend';
-    let qaHistory = [];
-    let qIndex = 0;
+  const micBtn = document.getElementById('micBtn');
+  const micIcon = document.getElementById('micIcon');
+  const ring = document.getElementById('ring');
+  const statusEl = document.getElementById('status');
+  const progressEl = document.getElementById('progress');
+  const aPanel = document.getElementById('assistantPanel');
+  const aText = document.getElementById('assistantText');
+  const uPanel = document.getElementById('userPanel');
+  const uText = document.getElementById('userText');
+  const debugEl = document.getElementById('debug');
+  const overlay = document.getElementById('overlay');
 
-    // realtime mic buffer
-    let recognizer = null;
-    let bgListening = false;
-    let liveInterim = '';
-    let liveFinal = '';
-    let lastSpeechAt = 0;
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-    // ---------- UI Helpers ----------
-    function setStatus(text) { micStatus.textContent = text; }
+  const TOTAL = 9;
+  const MAX_ANSWER_MS = 30000;
+  const SILENCE_MS = 900;
+  const POLL_MS = 70;
 
-    function setMicUI(active) {
-        if (active) {
-            micBtn.classList.add('listening');
-            breatheRing.classList.add('active');
-            micIcon.className = 'fa-solid fa-stop';
-        } else {
-            micBtn.classList.remove('listening');
-            breatheRing.classList.remove('active');
-            micIcon.className = 'fa-solid fa-microphone';
-        }
-    }
+  let state = 'IDLE';
+  let running = false;
+  let recognizer = null;
+  let listening = false;
 
-    function showUserText(text) {
-        transcriptText.textContent = text || '(no speech detected)';
-        transcriptWrap.style.display = 'block';
-    }
+  let liveFinal = '';
+  let liveInterim = '';
+  let speechStartedAt = 0;
+  let lastSpeechAt = 0;
 
-    function showAssistantText(text) {
-        lastAssistantText = text;
-        responseText.textContent = text;
-        responseWrap.style.display = 'block';
-    }
+  let userName = '';
+  let qIndex = 0;
+  let qa = [];
 
-    function sleep(ms) { return new Promise(res => setTimeout(res, ms)); }
+  function log(msg){
+    console.log(msg);
+    debugEl.textContent += '\n' + msg;
+    debugEl.scrollTop = debugEl.scrollHeight;
+  }
+  function setStatus(s){ statusEl.textContent = s; }
+  function setProgress(s){ progressEl.textContent = s; }
+  function showAssistant(t){ aPanel.style.display='block'; aText.textContent=t; }
+  function showUser(t){ uPanel.style.display='block'; uText.textContent=t || '(no speech detected)'; }
+  function setMic(active){
+    micBtn.classList.toggle('listening', active);
+    ring.classList.toggle('active', active);
+    micIcon.className = active ? 'fa-solid fa-stop' : 'fa-solid fa-microphone';
+  }
 
-    function speak(text) {
-        return new Promise((resolve) => {
-            if (!('speechSynthesis' in window)) return resolve();
-            window.speechSynthesis.cancel();
-            const u = new SpeechSynthesisUtterance(text);
-            u.rate = 0.93;
-            u.pitch = 1.0;
-            u.onend = resolve;
-            u.onerror = resolve;
-            window.speechSynthesis.speak(u);
-        });
-    }
-
-    async function speakAndShow(text) {
-        showAssistantText(text);
-        setStatus('AUDITOR SPEAKING...');
-        await speak(text);
-    }
-
-    replayBtn?.addEventListener('click', () => {
-        if (lastAssistantText) speak(lastAssistantText);
+  function speak(text){
+    return new Promise((resolve)=>{
+      showAssistant(text);
+      setStatus('AUDITOR SPEAKING...');
+      if (!('speechSynthesis' in window)) return resolve();
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 0.99; u.pitch = 1.0;
+      u.onend = resolve; u.onerror = resolve;
+      window.speechSynthesis.speak(u);
     });
+  }
 
-    // ---------- Recognition ----------
-    function initRecognizer() {
-        if (!SR) return false;
+  function resetBuffer(){
+    liveFinal=''; liveInterim=''; speechStartedAt=0; lastSpeechAt=0;
+  }
 
-        recognizer = new SR();
-        recognizer.lang = 'en-US';
-        recognizer.interimResults = true;
-        recognizer.continuous = true;
-        recognizer.maxAlternatives = 1;
+  function initRecognizer(){
+    if (!SR) return false;
+    recognizer = new SR();
+    recognizer.lang = 'en-US';
+    recognizer.interimResults = true;
+    recognizer.continuous = true;
+    recognizer.maxAlternatives = 1;
 
-        recognizer.onresult = (event) => {
-            let interimChunk = '';
-            for (let i = event.resultIndex; i < event.results.length; i++) {
-                const t = (event.results[i][0]?.transcript || '').trim();
-                if (!t) continue;
-                if (event.results[i].isFinal) {
-                    liveFinal += (liveFinal ? ' ' : '') + t;
-                } else {
-                    interimChunk += (interimChunk ? ' ' : '') + t;
-                }
-            }
-            liveInterim = interimChunk.trim();
-            lastSpeechAt = Date.now();
+    recognizer.onresult = (e) => {
+      let interim = '';
+      for(let i=e.resultIndex;i<e.results.length;i++){
+        const t = (e.results[i][0]?.transcript || '').trim();
+        if(!t) continue;
+        if(e.results[i].isFinal) liveFinal += (liveFinal ? ' ' : '') + t;
+        else interim += (interim ? ' ' : '') + t;
+      }
+      liveInterim = interim.trim();
+      const now = Date.now();
+      if(!speechStartedAt) speechStartedAt = now;
+      lastSpeechAt = now;
+      const txt = [liveFinal, liveInterim].filter(Boolean).join(' ').trim();
+      if(txt) showUser(txt);
+    };
 
-            // live preview of what user is saying
-            const liveText = [liveFinal, liveInterim].filter(Boolean).join(' ').trim();
-            if (liveText) showUserText(liveText);
-        };
+    recognizer.onerror = (e) => {
+      log('Recognizer error: ' + (e.error || 'unknown'));
+      if (listening && running) setTimeout(() => { try{ recognizer.start(); }catch{} }, 120);
+    };
+    recognizer.onend = () => {
+      if (listening && running) setTimeout(() => { try{ recognizer.start(); }catch{} }, 120);
+    };
+    return true;
+  }
 
-        recognizer.onerror = () => {
-            if (bgListening && running) {
-                setTimeout(() => { try { recognizer.start(); } catch (_) {} }, 200);
-            }
-        };
+  function startListening(){
+    if(!recognizer && !initRecognizer()) return false;
+    if(listening) return true;
+    listening = true;
+    try{ recognizer.start(); } catch(e){ log('startListening failed: ' + e.message); }
+    return true;
+  }
+  function stopListening(){
+    listening = false;
+    try{ recognizer && recognizer.stop(); } catch{}
+  }
 
-        recognizer.onend = () => {
-            if (bgListening && running) {
-                setTimeout(() => { try { recognizer.start(); } catch (_) {} }, 150);
-            }
-        };
-
-        return true;
+  async function ensureMicPermission(){
+    try{
+      const s = await navigator.mediaDevices.getUserMedia({audio:true});
+      s.getTracks().forEach(t => t.stop());
+      return true;
+    }catch(e){
+      log('Mic permission denied: ' + e.message);
+      return false;
     }
+  }
 
-    function startBackgroundListening() {
-        if (!recognizer && !initRecognizer()) return false;
-        if (bgListening) return true;
-        bgListening = true;
-        try { recognizer.start(); } catch (_) {}
-        return true;
-    }
+  async function captureAnswer(){
+    setStatus('LISTENING...');
+    const started = Date.now();
+    const baseline = liveFinal;
 
-    function stopBackgroundListening() {
-        bgListening = false;
-        try { recognizer?.stop(); } catch (_) {}
-    }
+    return new Promise((resolve) => {
+      const timer = setInterval(() => {
+        const now = Date.now();
+        const elapsed = now - started;
+        const newFinal = liveFinal.slice(baseline.length).trim();
+        const combined = [newFinal, liveInterim].filter(Boolean).join(' ').trim();
 
-    function clearBuffer() {
-        liveInterim = '';
-        liveFinal = '';
-        lastSpeechAt = 0;
-    }
+        const hasSpeech = combined.length > 0;
+        const silenceFor = lastSpeechAt ? (now - lastSpeechAt) : Infinity;
 
-    async function captureUntilSilence(maxWaitMs = 60000) {
-        const started = Date.now();
-        const baselineFinal = liveFinal;
-
-        setStatus('LISTENING...');
-        return new Promise((resolve) => {
-            const t = setInterval(() => {
-                const now = Date.now();
-                const elapsed = now - started;
-
-                const newFinal = liveFinal.slice(baselineFinal.length).trim();
-                const combined = [newFinal, liveInterim].filter(Boolean).join(' ').trim();
-
-                const hasSpeech = combined.length > 0;
-                const silenceFor = lastSpeechAt ? (now - lastSpeechAt) : Infinity;
-
-                if (hasSpeech && silenceFor >= SILENCE_STOP_MS) {
-                    clearInterval(t);
-                    resolve(combined);
-                    return;
-                }
-
-                if (elapsed >= maxWaitMs) {
-                    clearInterval(t);
-                    resolve(combined);
-                }
-            }, 120);
-        });
-    }
-
-    // ---------- Context-Aware Question Generator ----------
-    function cleanName(v) {
-        return (v || '')
-            .replace(/[^\p{L}\p{N}\s'-]/gu, '')
-            .trim()
-            .split(/\s+/)
-            .slice(0, 3)
-            .join(' ');
-    }
-
-    function pickNextQuestion(index, history) {
-        const base = [
-            "Tell me about a time you faced a significant challenge at work. How did you handle it?",
-            "How do you typically handle disagreements with colleagues or supervisors?",
-            "Describe a situation where you had to meet a very tight deadline. What was your approach?",
-            "Tell me about a time you received critical feedback. How did you respond to it?",
-            "How do you prioritize tasks when you have multiple urgent deadlines competing for attention?",
-            "Describe a situation where you had to lead a team through a difficult or ambiguous project.",
-            "Tell me about a time you made a mistake at work. What did you learn from it?",
-            "How do you handle working under sustained pressure or in a high-stress environment?",
-            "What is one professional accomplishment you are most proud of, and why does it matter to you?"
-        ];
-
-        if (index === 0) return base[0];
-
-        const prev = history[history.length - 1] || {};
-        const a = (prev.answer || '').toLowerCase();
-
-        // Context-adaptive follow-ups based on previous answer
-        if (a.includes('team') || a.includes('collaborat') || a.includes('group')) {
-            return "You mentioned team dynamics. How do you handle situations where a team member is underperforming?";
+        if(hasSpeech && silenceFor >= SILENCE_MS){
+          clearInterval(timer);
+          return resolve(combined);
         }
-        if (a.includes('fail') || a.includes('mistake') || a.includes('wrong')) {
-            return "You mentioned a setback. How do you ensure you recover and maintain credibility after a failure?";
+        if(elapsed >= MAX_ANSWER_MS){
+          clearInterval(timer);
+          return resolve(combined);
         }
-        if (a.includes('lead') || a.includes('manag') || a.includes('delegat')) {
-            return "You mentioned leadership. What is your approach to delegating tasks while maintaining accountability?";
-        }
-        if (a.includes('stress') || a.includes('pressure') || a.includes('overwhelm')) {
-            return "You mentioned high pressure. What specific techniques do you use to stay composed under stress?";
-        }
-        if (a.includes('conflict') || a.includes('disagree') || a.includes('argument')) {
-            return "You brought up conflict. Can you describe how you turned a professional disagreement into a productive outcome?";
-        }
-        if (a.includes('deadline') || a.includes('time') || a.includes('urgent')) {
-            return "Time pressure came up. How do you decide what to sacrifice when you genuinely cannot meet every deadline?";
-        }
-        if (a.includes('feedback') || a.includes('criticism') || a.includes('review')) {
-            return "Feedback is important. How do you give constructive criticism to someone senior to you?";
-        }
-
-        return base[Math.min(index, base.length - 1)];
-    }
-
-    function acknowledgment(answer) {
-        if (!answer) return "I didn't catch that clearly. Let's move on to the next question.";
-        const short = answer.split(/\s+/).slice(0, 12).join(' ');
-        return `Noted. I heard: "${short}..." — Thank you. Moving on.`;
-    }
-
-    async function pushMessage(role, content) {
-        try {
-            await fetch(BASE + '/api/hr-push-message.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ session_id: SESSION_ID, role: role, content: content })
-            });
-        } catch (e) {
-            console.error('Push error:', e);
-        }
-    }
-
-    // ---------- Time Greeting ----------
-    function getTimeGreeting() {
-        const h = new Date().getHours();
-        if (h < 12) return 'Good morning';
-        if (h < 17) return 'Good afternoon';
-        return 'Good evening';
-    }
-
-    // ---------- Main Flow ----------
-    async function runFlow() {
-        // Step 1: Ask Name
-        flowState = 'ASK_NAME';
-        progressEl.textContent = 'IDENTITY CALIBRATION';
-        const greeting = getTimeGreeting();
-        await speakAndShow(`${greeting}. I am your Senior Executive Auditor for today's session. Before we begin the behavioral audit, may I know your full name for the record?`);
-        await pushMessage('assistant', lastAssistantText);
-
-        clearBuffer();
-        const nameAnswer = await captureUntilSilence(30000);
-        showUserText(nameAnswer || '(no speech detected)');
-        userName = cleanName(nameAnswer) || CANDIDATE_NAME;
-        await pushMessage('user', userName);
-
-        // Step 2: Greet & Brief
-        flowState = 'GREET';
-        progressEl.textContent = 'BRIEFING';
-        await speakAndShow(`Welcome, ${userName}. This is a structured behavioral interview consisting of ${TOTAL_QUESTIONS} adaptive questions. Answer each question thoroughly and honestly. Your responses will be evaluated on clarity, depth, and professionalism. Let us begin.`);
-        await pushMessage('assistant', lastAssistantText);
-
-        // Step 3: Question Loop
-        flowState = 'QUESTIONS';
-        qIndex = 0;
-        qaHistory = [];
-
-        while (running && qIndex < TOTAL_QUESTIONS) {
-            const question = pickNextQuestion(qIndex, qaHistory);
-            progressEl.textContent = `QUESTION ${qIndex + 1} OF ${TOTAL_QUESTIONS}`;
-
-            const qText = `Question ${qIndex + 1}. ${question}`;
-            await speakAndShow(qText);
-            await pushMessage('assistant', qText);
-
-            clearBuffer();
-            const answer = await captureUntilSilence(60000);
-            showUserText(answer || '(no speech detected)');
-
-            qaHistory.push({ question, answer: answer || '' });
-            await pushMessage('user', answer || '(no response)');
-
-            const ack = acknowledgment(answer);
-            await speakAndShow(ack);
-            await pushMessage('assistant', ack);
-
-            // Wait before next question
-            if (qIndex < TOTAL_QUESTIONS - 1) {
-                setStatus('NEXT QUESTION IN 8 SECONDS...');
-                await sleep(NEXT_QUESTION_DELAY_MS);
-            }
-
-            qIndex++;
-        }
-
-        // Step 4: Finish & Generate Report
-        flowState = 'DONE';
-        stopBackgroundListening();
-        progressEl.textContent = 'AUDIT COMPLETE';
-        await speakAndShow(`Thank you, ${userName}. I have completed all ${TOTAL_QUESTIONS} questions and captured your responses. The behavioral audit is now complete. Your Executive Performance Report is being generated.`);
-        await pushMessage('assistant', lastAssistantText);
-        setStatus('GENERATING REPORT...');
-
-        analysisOverlay.style.display = 'flex';
-
-        try {
-            await fetch(BASE + '/api/analyze.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ session_id: SESSION_ID, force_complete: true })
-            });
-            window.location.href = BASE + '/app/hr-report-rich.php?session_id=' + SESSION_ID;
-        } catch (e) {
-            console.error('Analysis error:', e);
-            window.location.href = BASE + '/app/dashboard.php';
-        }
-    }
-
-    async function startFlow() {
-        if (running) return;
-        running = true;
-        setMicUI(true);
-
-        if (!initRecognizer()) {
-            await speakAndShow('Voice input is not supported in your browser. Please use Chrome or Edge.');
-            stopFlow();
-            return;
-        }
-
-        startBackgroundListening();
-
-        try {
-            transcriptWrap.style.display = 'none';
-            responseWrap.style.display = 'none';
-            await runFlow();
-        } catch (e) {
-            console.error(e);
-            await speakAndShow('An error occurred during the audit. Please refresh and try again.');
-        }
-    }
-
-    function stopFlow() {
-        running = false;
-        flowState = 'IDLE';
-        stopBackgroundListening();
-        window.speechSynthesis?.cancel();
-        setMicUI(false);
-        setStatus('TAP TO BEGIN AUDIT');
-        progressEl.textContent = 'READY';
-    }
-
-    micBtn.addEventListener('click', async () => {
-        if (running) stopFlow();
-        else await startFlow();
+      }, POLL_MS);
     });
-});
+  }
+
+  function nextQuestion(idx, history){
+    const base = [
+      "Tell me about a significant challenge at work and how you handled it.",
+      "How do you handle disagreements with colleagues or managers?",
+      "Describe how you worked under a tight deadline.",
+      "Tell me about a time you received critical feedback.",
+      "How do you prioritize when everything is urgent?",
+      "Describe a time you led people through ambiguity.",
+      "Tell me about a mistake and what you learned.",
+      "How do you stay effective under sustained pressure?",
+      "What professional achievement are you most proud of and why?"
+    ];
+    if(idx===0) return base[0];
+    const prev = (history[history.length-1]?.answer || '').toLowerCase();
+    if(prev.includes('team')) return "You mentioned teams. How do you handle underperforming team members?";
+    if(prev.includes('mistake') || prev.includes('fail')) return "How did you rebuild trust after that situation?";
+    if(prev.includes('stress') || prev.includes('pressure')) return "What concrete technique helps you regulate under stress?";
+    return base[Math.min(idx, base.length-1)];
+  }
+
+  async function pushMessage(role, content){
+    try{
+      await fetch(BASE + '/api/hr-push-message.php', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({session_id: SESSION_ID, role, content})
+      });
+    }catch(e){ log('pushMessage failed: ' + e.message); }
+  }
+
+  function cleanName(t){
+    return (t || '').replace(/[^\p{L}\p{N}\s'-]/gu,'').trim().split(/\s+/).slice(0,3).join(' ');
+  }
+
+  async function runInterview(){
+    setProgress('IDENTITY');
+    const intro = "Good day. I am your executive auditor. Please tell me your full name.";
+    await speak(intro); await pushMessage('assistant', intro);
+
+    resetBuffer();
+    let nameAns = await captureAnswer();
+    if(!nameAns){
+      nameAns = prompt('Could not hear clearly. Please type your full name:') || '';
+    }
+    userName = cleanName(nameAns) || CANDIDATE_NAME || 'Candidate';
+    showUser(userName);
+    await pushMessage('user', userName);
+
+    setProgress('BRIEFING');
+    const brief = `Welcome, ${userName}. We will do ${TOTAL} adaptive questions. Please answer naturally.`;
+    await speak(brief); await pushMessage('assistant', brief);
+
+    qIndex = 0; qa = [];
+    while(running && qIndex < TOTAL){
+      setProgress(`QUESTION ${qIndex+1} OF ${TOTAL}`);
+      const q = nextQuestion(qIndex, qa);
+
+      await speak(`Question ${qIndex+1}. ${q}`);
+      await pushMessage('assistant', `Question ${qIndex+1}. ${q}`);
+
+      resetBuffer();
+      let ans = await captureAnswer();
+      if(!ans){
+        ans = prompt(`I could not catch Question ${qIndex+1}. Type your answer (optional):`) || '';
+      }
+      showUser(ans || '(no response)');
+      await pushMessage('user', ans || '(no response)');
+      qa.push({question:q, answer:ans || ''});
+
+      const ack = ans ? "Noted. Thank you." : "No clear response captured. Moving forward.";
+      await speak(ack);
+      await pushMessage('assistant', ack);
+
+      qIndex++;
+    }
+
+    setProgress('COMPLETED');
+    await speak(`Thank you, ${userName}. Interview completed. Generating report now.`);
+    overlay.style.display = 'flex';
+    setStatus('GENERATING REPORT...');
+
+    try{
+      await fetch(BASE + '/api/analyze.php', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({session_id: SESSION_ID, force_complete: true})
+      });
+      window.location.href = BASE + '/app/hr-report-rich.php?session_id=' + SESSION_ID;
+    }catch(e){
+      log('Analyze failed: ' + e.message);
+      window.location.href = BASE + '/app/dashboard.php';
+    }
+  }
+
+  async function startFlow(){
+    if(running) return;
+    running = true;
+    state = 'RUNNING';
+    setMic(true);
+    setStatus('INITIALIZING...');
+
+    const okPerm = await ensureMicPermission();
+    if(!okPerm){
+      alert('Microphone permission is blocked. Please allow mic access and reload.');
+      stopFlow();
+      return;
+    }
+
+    if(!initRecognizer()){
+      alert('SpeechRecognition API not supported in this browser. Use latest Chrome/Edge.');
+      stopFlow();
+      return;
+    }
+
+    startListening();
+    try{
+      await runInterview();
+    }catch(e){
+      log('runInterview crash: ' + e.message);
+      alert('Interview failed due to runtime error. Check debug panel.');
+      stopFlow();
+    }
+  }
+
+  function stopFlow(){
+    running = false;
+    state = 'IDLE';
+    stopListening();
+    window.speechSynthesis?.cancel();
+    setMic(false);
+    setStatus('TAP TO BEGIN AUDIT');
+    if (!String(progressEl.textContent).includes('COMPLETED')) setProgress('READY');
+  }
+
+  micBtn.addEventListener('click', async () => {
+    log('Mic button clicked. running=' + running);
+    if(running) stopFlow();
+    else await startFlow();
+  });
+
+  log('Page ready. SpeechRecognition=' + (!!SR));
+})();
 </script>
 </body>
 </html>
